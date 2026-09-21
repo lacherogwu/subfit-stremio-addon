@@ -104,7 +104,7 @@ test('the Prison Break WEB-DL case: everything is labelled a mismatch, and nothi
   const { body } = await listFor(WEB_FILE);
   expect(body.subtitles.some((s) => s.id.includes('⭐'))).toBe(false);
   expect(body.subtitles.every((s) => s.id.includes('⚠️'))).toBe(true);
-  expect(body.subtitles.some((s) => s.id.includes('file is WEB'))).toBe(true);
+  expect(body.subtitles.some((s) => s.id.includes('wrong release'))).toBe(true);
 });
 
 test('the DVD subtitle is offered as re-timed when a BluRay is playing', async () => {

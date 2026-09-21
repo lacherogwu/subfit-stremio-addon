@@ -19,10 +19,15 @@ const ALREADY_ALIGNED_S = 0.35;
 
 const RANK: Record<State, number> = { match: 3, retimed: 2, unknown: 1, mismatch: 0 };
 
+/**
+ * The player already shows the language above each entry, so the label does not repeat it.
+ * What it needs to answer, in order: will this work, and if I am choosing between two of
+ * them, which release is it.
+ */
 const describe = (e: CatalogueEntry): string => {
-  const family = e.release.family === 'unknown' ? 'unknown timing' : e.release.family;
-  const detail = e.release.group ?? e.name.slice(0, 40);
-  return `${family} · ${detail}`;
+  const family = e.release.family === 'unknown' ? '' : e.release.family;
+  const detail = e.release.group ?? e.name.slice(0, 28);
+  return [family, detail].filter(Boolean).join(' ');
 };
 
 const labelFor = (
@@ -32,24 +37,24 @@ const labelFor = (
   target: Release,
   transform?: Alignment,
 ): string => {
-  // "verified" marks a verdict that came from comparing this subtitle's timings against one
-  // known to fit the file, rather than from trusting a release name. It is the difference
-  // between "this should work" and "this was checked", and it is worth saying out loud.
-  const verified = via === 'timing' ? ' · verified' : '';
+  // The verdict comes first, because it is the only part that decides anything. "fits" was
+  // measured against a subtitle known to match the file; "likely" was read off a release
+  // name and never checked.
   switch (state) {
     case 'match':
-      return `✅ ${describe(entry)}${verified}`;
+      return `${via === 'timing' ? '✅ fits' : '✅ likely'} · ${describe(entry)}`;
     case 'retimed': {
       const shift = transform
         ? ` ${transform.offset >= 0 ? '+' : ''}${transform.offset.toFixed(1)}s`
         : '';
-      const rate = transform && transform.scale !== 1 ? ` ×${transform.scale.toFixed(3)}` : '';
-      return `⏱ ${entry.release.family}→${target.family} fixed${rate}${shift} · ${entry.release.group ?? entry.name.slice(0, 30)}`;
+      return `⏱ fixed ${entry.release.family}→${target.family}${shift} · ${describe(entry)}`;
     }
     case 'mismatch':
-      return `⚠️ ${describe(entry)} · file is ${target.family}${verified}`;
+      return `⚠️ wrong release · ${describe(entry)}`;
+    // The source is named only here, where something could not be settled and knowing who
+    // supplied it is the next thing anyone would want.
     default:
-      return `❔ ${describe(entry)} · unverified`;
+      return `❔ unchecked · ${describe(entry)} [${entry.source}]`;
   }
 };
 
@@ -142,7 +147,20 @@ export function select(
 
   const measured = new Map<number, Alignment | null>();
   const list: Disposition[] = served.map((entry) => {
-    const { state, via, transform } = decide(entry, target, references, measured);
+    let { state, via, transform } = decide(entry, target, references, measured);
+
+    // A subtitle whose only claim to fit is its own filename, with nothing to check it
+    // against, is not a match - it is an assertion. OpenSubtitles files the occasional
+    // subtitle under the wrong show, and one such entry was being advertised as the best
+    // Russian match for an episode of a series it does not belong to.
+    if (state === 'match' && via === 'name') {
+      const corroborating = references.filter((r) => r.id !== entry.id).length;
+      if (corroborating === 0) {
+        state = 'unknown';
+        transform = undefined;
+      }
+    }
+
     return { entry, state, via, transform, label: labelFor(state, via, entry, target, transform) };
   });
 

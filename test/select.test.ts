@@ -95,11 +95,37 @@ test("with no reference of the file's family, nothing is re-timed and nothing is
   expect(stars).toEqual([]);
 });
 
-test('an entry with no timing falls back to its name, and stays visible', () => {
+test('an entry with no timing falls back to its name when something corroborates it', () => {
   const nameless = entry('Prison.Break.S01E06.720p.BluRay.x264-CtrlHD', undefined);
-  const { list } = select([nameless], classify('Show.1080p.BluRay-AAA'), ['he']);
-  expect(list[0]?.state).toBe('match');
-  expect(list[0]?.label).toContain('BluRay');
+  const { list } = select([nameless, BLURAY], classify('Show.1080p.BluRay-AAA'), ['he']);
+  const it = list.find((d) => d.entry.name.includes('CtrlHD'));
+  expect(it?.state).toBe('match');
+  expect(it?.label).toContain('likely');
+  expect(it?.label).toContain('BluRay');
+});
+
+test('a lone subtitle vouching for itself is unchecked, not a match', () => {
+  // OpenSubtitles files the occasional subtitle under the wrong show. One such entry was
+  // being advertised as the best Russian match for an episode of a series it is not from,
+  // on the strength of its own filename and nothing else.
+  const lone = entry('Prison.Break.Sequel.s01e06.WEB-DL.720p', undefined, 'ru', 'lone');
+  const { list, stars } = select([lone], classify('Prison.Break.S01E06.1080p.WEB-DL-X.mkv'), [
+    'ru',
+  ]);
+  expect(list[0]?.state).toBe('unknown');
+  expect(list[0]?.label).toContain('unchecked');
+  expect(stars).toEqual([]);
+});
+
+test('but a name-based match is kept when other subtitles of that family exist', () => {
+  const namedOnly = entry('Show.S01E01.1080p.WEB-DL-AAA', undefined, 'ru', 'named');
+  const webWithTiming = entry('Show.S01E01.1080p.WEB-DL-BBB', cues.ESiR, 'en', 'web-en');
+  const { list } = select(
+    [namedOnly, webWithTiming],
+    classify('Show.S01E01.1080p.WEB-DL-CCC.mkv'),
+    ['en', 'ru'],
+  );
+  expect(list.find((d) => d.entry.id === 'named')?.state).toBe('match');
 });
 
 test('an unclassifiable subtitle against an unclassifiable file is labelled unknown', () => {
@@ -125,19 +151,4 @@ test('same release group wins the tie for the star', () => {
     ['he'],
   );
   expect(stars[0]?.entry.id).toBe(BLURAY.id);
-});
-
-test('a verdict reached by measurement says so, and one from a name does not', () => {
-  const { list } = select([BLURAY, BLURAY_2, DVD], classify('Show.1080p.BluRay.x264-AAA'), ['he']);
-  const measured = list.find((d) => d.entry.id === BLURAY.id);
-  expect(measured?.via).toBe('timing');
-  expect(measured?.label).toContain('verified');
-
-  const nameOnly = select(
-    [entry('Show.720p.BluRay-X', undefined)],
-    classify('Show.1080p.BluRay-AAA'),
-    ['he'],
-  );
-  expect(nameOnly.list[0]?.via).toBe('name');
-  expect(nameOnly.list[0]?.label).not.toContain('verified');
 });
