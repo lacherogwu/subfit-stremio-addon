@@ -94,9 +94,7 @@ export async function fetchAll(
   const entries = Object.entries(cfg.sources) as [SourceName, string][];
 
   const results = await Promise.allSettled(
-    entries.map(([name, base]) =>
-      fetchOne(name, base, type, id, extras, cfg.languages, signal),
-    ),
+    entries.map(([name, base]) => fetchOne(name, base, type, id, extras, cfg.languages, signal)),
   );
 
   const subs: RawSub[] = [];

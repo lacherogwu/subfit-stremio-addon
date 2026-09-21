@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 import type { Config } from '../src/config';
 import { fetchAll } from '../src/sources';
-import { startStub, type Stub } from './helpers/stub';
+import { type Stub, startStub } from './helpers/stub';
 
 const stubs: Stub[] = [];
 afterEach(async () => {
@@ -10,6 +10,7 @@ afterEach(async () => {
 
 const cfgFor = (wizdom: string, ktuvit: string, opensubtitles: string): Config => ({
   port: 0,
+  baseUrl: '',
   token: 't',
   logFile: '',
   sources: { wizdom, ktuvit, opensubtitles },
@@ -45,7 +46,12 @@ test('merges the upstreams and strips their id prefixes', async () => {
     },
   });
 
-  const { subs, errors } = await fetchAll(cfgFor(w.url, k.url, o.url), 'series', 'tt0455275:1:6', '');
+  const { subs, errors } = await fetchAll(
+    cfgFor(w.url, k.url, o.url),
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
 
   expect(errors).toEqual([]);
   expect(subs.map((s) => s.name)).toEqual([
@@ -59,11 +65,18 @@ test('merges the upstreams and strips their id prefixes', async () => {
 test('one failing upstream does not lose the others, and is reported', async () => {
   const w = await track({ '/subtitles': 500 });
   const k = await track({
-    '/subtitles': { subtitles: [{ id: '[KTUVIT]Show.720p.BluRay-X', url: 'http://x/3.srt', lang: 'heb' }] },
+    '/subtitles': {
+      subtitles: [{ id: '[KTUVIT]Show.720p.BluRay-X', url: 'http://x/3.srt', lang: 'heb' }],
+    },
   });
   const o = await track({ '/subtitles': { subtitles: [] } });
 
-  const { subs, errors } = await fetchAll(cfgFor(w.url, k.url, o.url), 'series', 'tt0455275:1:6', '');
+  const { subs, errors } = await fetchAll(
+    cfgFor(w.url, k.url, o.url),
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
 
   expect(subs).toHaveLength(1);
   expect(errors).toHaveLength(1);

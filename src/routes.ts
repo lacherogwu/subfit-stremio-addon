@@ -91,6 +91,8 @@ export function createApp(deps: AppDeps): Hono {
     });
     const { list, stars } = select(entries, target, cfg.languages);
 
+    const origin = cfg.baseUrl || new URL(c.req.url).origin;
+
     const toStremio = (d: Disposition): { id: string; url: string; lang: string } => {
       const scale = d.transform?.scale ?? 1;
       const offset = d.transform?.offset ?? 0;
@@ -98,22 +100,19 @@ export function createApp(deps: AppDeps): Hono {
       cache.putRef(key, { url: d.entry.url, entryId: d.entry.id, scale, offset } satisfies Ref);
       return {
         id: `${d.label} [${d.entry.source}]`,
-        url: `${new URL(c.req.url).origin}/${cfg.token}/sub/${key}.srt`,
+        url: `${origin}/${cfg.token}/sub/${key}.srt`,
         lang: d.entry.lang,
       };
     };
 
-    const subtitles = [
-      ...stars.map(toStremio),
-      ...list.map(toStremio),
-    ];
+    const subtitles = [...stars.map(toStremio), ...list.map(toStremio)];
 
     // A dead upstream is shown, not swallowed: an entry nobody can select, whose title says
     // which source failed. An empty list would look like "no subtitles exist".
     for (const message of errors) {
       subtitles.push({
         id: `❌ ${message}`,
-        url: `${new URL(c.req.url).origin}/${cfg.token}/sub/none.srt`,
+        url: `${origin}/${cfg.token}/sub/none.srt`,
         lang: cfg.languages[0] ?? 'en',
       });
     }
@@ -187,7 +186,8 @@ export function createApp(deps: AppDeps): Hono {
       const counts: Record<string, Partial<Record<Family, number>>> = {};
       for (const e of entries) {
         if (e.duplicateOf) continue;
-        const perLang = (counts[e.lang] ??= {});
+        const perLang = counts[e.lang] ?? {};
+        counts[e.lang] = perLang;
         perLang[e.release.family] = (perLang[e.release.family] ?? 0) + 1;
       }
       return c.json(counts);

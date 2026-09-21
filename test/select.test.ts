@@ -73,14 +73,21 @@ test('one star per language, and only from a match or a re-timing', () => {
 test('a star falls back to a re-timed subtitle when that language has no exact match', () => {
   // Timing is language-agnostic, so an English BluRay subtitle is a perfectly good
   // reference for deciding how to move a Hebrew DVD subtitle onto a BluRay file.
-  const englishReference = entry('Prison.Break.S01E06.720p.BluRay.x264-HALCYON', cues.HALCYON, 'en', 'en-ref');
-  const { stars } = select([englishReference, DVD, HDTV], classify('Show.1080p.BluRay.x264-AAA'), ['he']);
+  const englishReference = entry(
+    'Prison.Break.S01E06.720p.BluRay.x264-HALCYON',
+    cues.HALCYON,
+    'en',
+    'en-ref',
+  );
+  const { stars } = select([englishReference, DVD, HDTV], classify('Show.1080p.BluRay.x264-AAA'), [
+    'he',
+  ]);
   expect(stars).toHaveLength(1);
   expect(stars[0]?.entry.lang).toBe('he');
   expect(stars[0]?.state).toBe('retimed');
 });
 
-test('with no reference of the file\'s family, nothing is re-timed and nothing is starred', () => {
+test("with no reference of the file's family, nothing is re-timed and nothing is starred", () => {
   // There is no way to measure a correction without something correctly timed to measure
   // against, and guessing one would be worse than admitting it.
   const { list, stars } = select([DVD, HDTV], classify('Show.1080p.BluRay.x264-AAA'), ['he']);
@@ -112,7 +119,11 @@ test('duplicates are collapsed out of the served list', () => {
 
 test('same release group wins the tie for the star', () => {
   const other = entry('Prison.Break.S01E06.720p.BluRay.DTS.x264-ESiR', cues.ESiR, 'he', 'other');
-  const { stars } = select([other, BLURAY], classify('Prison.Break.S01E06.1080p.BluRay.x264-HALCYON'), ['he']);
+  const { stars } = select(
+    [other, BLURAY],
+    classify('Prison.Break.S01E06.1080p.BluRay.x264-HALCYON'),
+    ['he'],
+  );
   expect(stars[0]?.entry.id).toBe(BLURAY.id);
 });
 
@@ -122,7 +133,11 @@ test('a verdict reached by measurement says so, and one from a name does not', (
   expect(measured?.via).toBe('timing');
   expect(measured?.label).toContain('verified');
 
-  const nameOnly = select([entry('Show.720p.BluRay-X', undefined)], classify('Show.1080p.BluRay-AAA'), ['he']);
+  const nameOnly = select(
+    [entry('Show.720p.BluRay-X', undefined)],
+    classify('Show.1080p.BluRay-AAA'),
+    ['he'],
+  );
   expect(nameOnly.list[0]?.via).toBe('name');
   expect(nameOnly.list[0]?.label).not.toContain('verified');
 });

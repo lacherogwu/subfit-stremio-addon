@@ -10,6 +10,7 @@ import cues from './fixtures/cues.json' with { type: 'json' };
 
 const cfg: Config = {
   port: 0,
+  baseUrl: '',
   token: 't',
   logFile: '',
   sources: { wizdom: 'http://w', ktuvit: 'http://k', opensubtitles: 'http://o' },
@@ -37,15 +38,15 @@ const WIZDOM_SEVEN: [string, number[]][] = [
   ['prison.break.106.hdtv-lol.VO', cues['hdtv-lol.VO']],
   ['Prison.Break.S01E06.720p.BluRay.DTS.x264-ESiR', cues.ESiR],
   ['Prison.Break.S01E06.720p.BluRay.x264-HALCYON', cues.HALCYON],
-  ['Prison.Break.S01E06.Riots,.Drills.and.the.Devil.(1).720p.BluRay.x264-HALCYON', cues['Riots,Drills.HALCYON']],
+  [
+    'Prison.Break.S01E06.Riots,.Drills.and.the.Devil.(1).720p.BluRay.x264-HALCYON',
+    cues['Riots,Drills.HALCYON'],
+  ],
   ['Prison.Break.S01E6.DVDRIP.SAINTS', cues['DVDRIP.SAINTS']],
   ['Prison.Break.S01E6.hdtv-LOL', cues['hdtv-LOL']],
 ];
 
-const depsFor = (
-  entries: [string, number[]][],
-  opts: { dead?: string } = {},
-): CatalogueDeps => {
+const depsFor = (entries: [string, number[]][], opts: { dead?: string } = {}): CatalogueDeps => {
   const subs: RawSub[] = entries.map(([name], i) => ({
     id: `wizdom:${i}`,
     source: 'wizdom',
@@ -67,14 +68,26 @@ const depsFor = (
 };
 
 test('seven wizdom entries collapse to four distinct timings', async () => {
-  const { entries } = await buildCatalogue(depsFor(WIZDOM_SEVEN), cfg, 'series', 'tt0455275:1:6', '');
+  const { entries } = await buildCatalogue(
+    depsFor(WIZDOM_SEVEN),
+    cfg,
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
   const distinct = entries.filter((e) => !e.duplicateOf);
   expect(entries).toHaveLength(6);
   expect(distinct).toHaveLength(4);
 });
 
 test('the duplicate pairs are the ones measured, and each points at its twin', async () => {
-  const { entries } = await buildCatalogue(depsFor(WIZDOM_SEVEN), cfg, 'series', 'tt0455275:1:6', '');
+  const { entries } = await buildCatalogue(
+    depsFor(WIZDOM_SEVEN),
+    cfg,
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
   const byName = (part: string) => entries.find((e) => e.name.includes(part));
 
   const vo = byName('hdtv-lol.VO');
@@ -87,7 +100,13 @@ test('the duplicate pairs are the ones measured, and each points at its twin', a
 });
 
 test('same-family subs share a cluster and HDTV sits in its own', async () => {
-  const { entries } = await buildCatalogue(depsFor(WIZDOM_SEVEN), cfg, 'series', 'tt0455275:1:6', '');
+  const { entries } = await buildCatalogue(
+    depsFor(WIZDOM_SEVEN),
+    cfg,
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
   const esir = entries.find((e) => e.name.includes('ESiR'));
   const halcyon = entries.find((e) => e.name.includes('x264-HALCYON'));
   const hdtv = entries.find((e) => e.name.includes('hdtv-LOL'));
@@ -99,7 +118,13 @@ test('same-family subs share a cluster and HDTV sits in its own', async () => {
 test('a PAL DVD subtitle gets its own cluster, although it matches after a stretch', async () => {
   // Clustering answers "do these play in sync as they are?", not "could they be made to".
   // Conflating the two would let a subtitle that needs a correction be served without one.
-  const { entries } = await buildCatalogue(depsFor(WIZDOM_SEVEN), cfg, 'series', 'tt0455275:1:6', '');
+  const { entries } = await buildCatalogue(
+    depsFor(WIZDOM_SEVEN),
+    cfg,
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
   const dvd = entries.find((e) => e.name.includes('DVDRIP'));
   const bluray = entries.find((e) => e.name.includes('ESiR'));
   expect(dvd?.cluster).toBeDefined();
@@ -107,7 +132,13 @@ test('a PAL DVD subtitle gets its own cluster, although it matches after a stret
 });
 
 test('every entry is classified, including the ones that turned out to be duplicates', async () => {
-  const { entries } = await buildCatalogue(depsFor(WIZDOM_SEVEN), cfg, 'series', 'tt0455275:1:6', '');
+  const { entries } = await buildCatalogue(
+    depsFor(WIZDOM_SEVEN),
+    cfg,
+    'series',
+    'tt0455275:1:6',
+    '',
+  );
   expect(entries.map((e) => e.release.family).sort()).toEqual(
     ['BluRay', 'BluRay', 'BluRay', 'DVD', 'HDTV', 'HDTV'].sort(),
   );

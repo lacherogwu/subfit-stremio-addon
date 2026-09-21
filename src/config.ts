@@ -4,8 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 
-export const CONFIG_DIR: string =
-  process.env.SUBFIT_DIR || join(homedir(), '.config', 'subfit');
+export const CONFIG_DIR: string = process.env.SUBFIT_DIR || join(homedir(), '.config', 'subfit');
 
 export interface Sources {
   wizdom: string;
@@ -23,6 +22,16 @@ export interface Config {
    * their own instance of an upstream should be able to point at it without editing source.
    */
   sources: Sources;
+  /**
+   * Public address this service is reached at, if it differs from the address a caller
+   * used. Subtitle URLs are handed to a *player*, which may be a television on the other
+   * side of the house, while the caller may be an aggregator on this very machine - so
+   * URLs built from the incoming request would point at 127.0.0.1 and fetch nothing.
+   * Empty means "use the address the request came in on", which is right when the player
+   * calls this service directly.
+   */
+  baseUrl: string;
+
   /** Languages to serve, in preference order. Each gets its own best-match entry. */
   languages: string[];
   /**
@@ -39,6 +48,7 @@ export interface Config {
 
 const DEFAULTS: Omit<Config, 'token' | 'configIssues' | 'logFile'> = {
   port: 18702,
+  baseUrl: '',
   sources: {
     wizdom: 'https://4b139a4b7f94-wizdom-stremio-v2.baby-beamup.club',
     ktuvit: 'https://4b139a4b7f94-ktuvit-stremio.baby-beamup.club',
@@ -57,6 +67,7 @@ const SourcesSchema = z.object({
 
 const Schema = z.object({
   port: z.number().int().min(1).max(65535),
+  baseUrl: z.string(),
   token: z.string().min(16),
   logFile: z.string().min(1),
   sources: SourcesSchema,
@@ -85,9 +96,10 @@ export function loadConfig(dir: string = CONFIG_DIR): Config {
 
   const defaults: Omit<Config, 'configIssues'> = {
     ...DEFAULTS,
-    token: typeof raw.token === 'string' && raw.token.length >= 16
-      ? raw.token
-      : randomBytes(16).toString('hex'),
+    token:
+      typeof raw.token === 'string' && raw.token.length >= 16
+        ? raw.token
+        : randomBytes(16).toString('hex'),
     logFile: join(dir, 'subfit.log'),
   };
 
@@ -99,7 +111,9 @@ export function loadConfig(dir: string = CONFIG_DIR): Config {
       // Each key is validated by its own schema above, so the value matches this key's type.
       (cfg as Record<string, unknown>)[key] = parsed.data;
     } else {
-      issues.push(`config.json: ${key} is invalid (${parsed.error.issues[0]?.message ?? 'bad value'}); using the default`);
+      issues.push(
+        `config.json: ${key} is invalid (${parsed.error.issues[0]?.message ?? 'bad value'}); using the default`,
+      );
     }
   }
 

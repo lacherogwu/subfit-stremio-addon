@@ -2,7 +2,10 @@ import { expect, test } from 'vitest';
 import { classify } from '../src/classify';
 
 test.each([
-  ['Prison.Break.S01E06.Riots.Drills.and.the.Devil.Part.1.1080p.DSNP.WEB-DL.DDP5.1.H.264-playWEB.mkv', 'WEB'],
+  [
+    'Prison.Break.S01E06.Riots.Drills.and.the.Devil.Part.1.1080p.DSNP.WEB-DL.DDP5.1.H.264-playWEB.mkv',
+    'WEB',
+  ],
   ['Prison.Break.S01E06.720p.BluRay.x264-HALCYON', 'BluRay'],
   ['Prison.Break.S01E06.720p.BluRay.DTS.x264-ESiR', 'BluRay'],
   ['prison.break.106.hdtv-lol.VO', 'HDTV'],

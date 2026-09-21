@@ -2,7 +2,7 @@ import { align, identicalTiming } from './align';
 import type { Cache } from './cache';
 import { classify, type Release } from './classify';
 import type { Config } from './config';
-import { fetchAll as realFetchAll, type RawSub, type SourceName } from './sources';
+import type { RawSub, fetchAll as realFetchAll, SourceName } from './sources';
 import { parseSubtitle, unzipFirstSubtitle } from './subtitle';
 
 export interface CatalogueEntry {

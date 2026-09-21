@@ -33,7 +33,9 @@ test('round-trips cues through toSrt', () => {
 });
 
 test('pulls the subtitle out of a zip, which is how wizdom serves them', () => {
-  const zip = Buffer.from(zipSync({ 'readme.txt': new Uint8Array([1]), 'sub.srt': new Uint8Array([0x41]) }));
+  const zip = Buffer.from(
+    zipSync({ 'readme.txt': new Uint8Array([1]), 'sub.srt': new Uint8Array([0x41]) }),
+  );
   expect(unzipFirstSubtitle(zip)).toEqual(Buffer.from([0x41]));
 });
 

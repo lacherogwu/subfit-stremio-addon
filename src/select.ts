@@ -1,5 +1,5 @@
-import { align, type Alignment } from './align';
-import { SAME_TIMING, type CatalogueEntry } from './catalogue';
+import { type Alignment, align } from './align';
+import { type CatalogueEntry, SAME_TIMING } from './catalogue';
 import type { Family, Release } from './classify';
 
 export type State = 'match' | 'retimed' | 'mismatch' | 'unknown';
@@ -40,7 +40,9 @@ const labelFor = (
     case 'match':
       return `✅ ${describe(entry)}${verified}`;
     case 'retimed': {
-      const shift = transform ? ` ${transform.offset >= 0 ? '+' : ''}${transform.offset.toFixed(1)}s` : '';
+      const shift = transform
+        ? ` ${transform.offset >= 0 ? '+' : ''}${transform.offset.toFixed(1)}s`
+        : '';
       const rate = transform && transform.scale !== 1 ? ` ×${transform.scale.toFixed(3)}` : '';
       return `⏱ ${entry.release.family}→${target.family} fixed${rate}${shift} · ${entry.release.group ?? entry.name.slice(0, 30)}`;
     }

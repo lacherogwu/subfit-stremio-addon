@@ -25,7 +25,10 @@ test('ships working defaults for the upstream addons', () => {
 
 test('a bad field falls back to its default and is reported, rather than crashing', () => {
   const dir = freshDir();
-  writeFileSync(join(dir, 'config.json'), JSON.stringify({ port: 'not a number', languages: ['he'] }));
+  writeFileSync(
+    join(dir, 'config.json'),
+    JSON.stringify({ port: 'not a number', languages: ['he'] }),
+  );
   const cfg = loadConfig(dir);
   expect(cfg.port).toBe(18702);
   expect(cfg.languages).toEqual(['he']);

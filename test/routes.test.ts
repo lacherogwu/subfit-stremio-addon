@@ -15,6 +15,7 @@ const BLURAY_FILE = 'Prison.Break.S01E06.1080p.BluRay.x264-MIXED.mkv';
 
 const cfg: Config = {
   port: 0,
+  baseUrl: '',
   token: TOKEN,
   logFile: '',
   sources: { wizdom: 'http://w', ktuvit: 'http://k', opensubtitles: 'http://o' },
@@ -69,7 +70,10 @@ const appFor = (opts: { errors?: string[] } = {}) => {
 const listFor = async (file: string, app = appFor()) => {
   const extras = `filename=${encodeURIComponent(file)}`;
   const res = await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/${extras}.json`);
-  return { res, body: (await res.json()) as { subtitles: { id: string; url: string; lang: string }[] } };
+  return {
+    res,
+    body: (await res.json()) as { subtitles: { id: string; url: string; lang: string }[] },
+  };
 };
 
 test('parseExtras reads the three keys the matching depends on', () => {
@@ -135,7 +139,10 @@ test('fetching a re-timed subtitle returns shifted timings', async () => {
 
   const first = /(\d\d):(\d\d):(\d\d),(\d\d\d)/.exec(text);
   const seconds =
-    Number(first?.[1]) * 3600 + Number(first?.[2]) * 60 + Number(first?.[3]) + Number(first?.[4]) / 1000;
+    Number(first?.[1]) * 3600 +
+    Number(first?.[2]) * 60 +
+    Number(first?.[3]) +
+    Number(first?.[4]) / 1000;
   const originalFirst = cues['DVDRIP.SAINTS'][0] as number;
   expect(seconds).not.toBeCloseTo(originalFirst, 2);
   expect(seconds).toBeCloseTo(originalFirst * (25 / 23.976), 0);
@@ -155,4 +162,32 @@ test('a subtitle request with no extras still answers', async () => {
   const res = await appFor().request(`/${TOKEN}/subtitles/series/tt0455275:1:6.json`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { subtitles: unknown[] }).subtitles.length).toBeGreaterThan(0);
+});
+
+test("subtitle urls use the configured public address, not the caller's", async () => {
+  // An aggregator on the same machine calls us on localhost, but the player that fetches
+  // the subtitle may be a television. URLs built from the incoming request would point at
+  // 127.0.0.1 and fetch nothing.
+  const app = createApp({
+    cfg: { ...cfg, baseUrl: 'https://subs.example.com' },
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-base-'))),
+    log: () => {},
+    fetchAll: async () => ({
+      subs: [
+        {
+          id: 'wizdom:0',
+          source: 'wizdom' as const,
+          lang: 'he',
+          name: CATALOGUE[0]?.[0] ?? '',
+          url: 'http://w/0.srt',
+        },
+      ],
+      errors: [],
+    }),
+    fetchBody: async () => srtFor(CATALOGUE[0]?.[1] ?? []),
+  });
+
+  const res = await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6.json`);
+  const body = (await res.json()) as { subtitles: { url: string }[] };
+  expect(body.subtitles.every((s) => s.url.startsWith('https://subs.example.com/'))).toBe(true);
 });
