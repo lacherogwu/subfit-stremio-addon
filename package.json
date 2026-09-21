@@ -1,6 +1,6 @@
 {
   "name": "subfit-stremio-addon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Stremio subtitle addon that labels subtitles by the release they were timed for, removes duplicates, and re-times them to the file you are actually playing.",
   "license": "MIT",
   "type": "module",
