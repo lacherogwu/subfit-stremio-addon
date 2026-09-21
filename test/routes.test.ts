@@ -191,3 +191,20 @@ test("subtitle urls use the configured public address, not the caller's", async 
   const body = (await res.json()) as { subtitles: { url: string }[] };
   expect(body.subtitles.every((s) => s.url.startsWith('https://subs.example.com/'))).toBe(true);
 });
+
+test('fetching the same subtitle twice serves the cached copy identically', async () => {
+  // The second fetch takes a different branch — it serves the stored re-timed body rather
+  // than rebuilding it. That branch reached production untested and returned 500.
+  const app = appFor();
+  const { body } = await listFor(BLURAY_FILE, app);
+  const path = new URL(body.subtitles[1]?.url ?? '').pathname;
+
+  const first = await app.request(path);
+  expect(first.status).toBe(200);
+  const firstText = await first.text();
+
+  const second = await app.request(path);
+  expect(second.status).toBe(200);
+  expect(second.headers.get('content-type')).toContain('utf-8');
+  expect(await second.text()).toBe(firstText);
+});

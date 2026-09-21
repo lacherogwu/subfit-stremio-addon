@@ -22,7 +22,18 @@ interface Ref {
   offset: number;
 }
 
-const SRT_HEADERS = { 'content-type': 'text/plain; charset=utf-8' } as const;
+/**
+ * A *fresh* object per response, deliberately.
+ *
+ * `@hono/node-server` writes `Content-Length` into whatever header object it is handed, as
+ * a number. Hand it the same object twice and the second response finds a non-string header
+ * value, tries to iterate it, and dies with "v is not iterable" - a 500 on every request
+ * after the first. Unit tests cannot see this: `app.request()` never goes through the node
+ * adapter, so nothing mutates anything.
+ */
+const srtHeaders = (): Record<string, string> => ({
+  'content-type': 'text/plain; charset=utf-8',
+});
 
 /** The family lookup answers a stream list, so it must never be the slow part of one. */
 const FAMILIES_BUDGET_MS = 1000;
@@ -140,7 +151,7 @@ export function createApp(deps: AppDeps): Hono {
     if (!ref) return c.text('unknown subtitle', 404);
 
     const cached = cache.getRetimed(key);
-    if (cached) return c.body(new Uint8Array(cached), 200, SRT_HEADERS);
+    if (cached) return c.body(new Uint8Array(cached), 200, srtHeaders());
 
     let body = cache.getBody(ref.entryId);
     if (!body) {
@@ -160,7 +171,7 @@ export function createApp(deps: AppDeps): Hono {
     const out = Buffer.from(toSrt(moved), 'utf8');
     cache.putRetimed(key, out);
 
-    return c.body(new Uint8Array(out), 200, SRT_HEADERS);
+    return c.body(new Uint8Array(out), 200, srtHeaders());
   });
 
   /**
