@@ -1,0 +1,33 @@
+{
+  "name": "subfit-stremio-addon",
+  "version": "0.1.0",
+  "description": "A Stremio subtitle addon that labels subtitles by the release they were timed for, removes duplicates, and re-times them to the file you are actually playing.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "start": "node dist/server.mjs",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "fflate": "^0.8.2",
+    "hono": "^4.13.8",
+    "iconv-lite": "^0.6.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^26.6.2",
+    "tsdown": "^0.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
