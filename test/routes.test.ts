@@ -250,3 +250,17 @@ test('fetching the same subtitle twice serves the cached copy identically', asyn
   expect(second.headers.get('content-type')).toContain('utf-8');
   expect(await second.text()).toBe(firstText);
 });
+
+test('a cached menu is not reused across versions', async () => {
+  // Cached menus are rendered text. An upgrade that changes the wording must not leave the
+  // old wording on screen for the rest of the cache's life.
+  const { VERSION } = await import('../src/version');
+  const cache = new Cache(mkdtempSync(join(tmpdir(), 'subfit-ver-')));
+  cache.putCatalogue(`resp:0.0.0-old:series:tt0455275:1:6:BluRay`, { subtitles: [{ id: 'stale' }] });
+
+  const app = appFor();
+  const { body } = await listFor(BLURAY_FILE, app);
+
+  expect(VERSION).not.toBe('0.0.0-old');
+  expect(body.subtitles.some((s) => s.id === 'stale')).toBe(false);
+});

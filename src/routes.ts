@@ -99,7 +99,9 @@ export function createApp(deps: AppDeps): Hono {
     // The finished menu is cached per file family, not just the catalogue it was built
     // from: turning a catalogue into a labelled, ranked list means measuring every subtitle
     // against the ones that fit, and that work was being redone on every request.
-    const responseKey = `resp:${type}:${id}:${target.family}`;
+    // The version is part of the key: a cached menu is a rendering, and an upgrade that
+    // changes how entries are labelled must not leave hours of old wording on the screen.
+    const responseKey = `resp:${VERSION}:${type}:${id}:${target.family}`;
     const ready = cache.getCatalogue<{ subtitles: unknown[] }>(responseKey);
     if (ready) {
       log(`subtitles ${type}/${id} target=${target.family} → cached`);

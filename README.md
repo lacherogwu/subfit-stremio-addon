@@ -11,21 +11,29 @@ subfit wraps the subtitle addons you already use and, for each subtitle, says ho
 to the file in front of you:
 
 ```
-⭐ best match · ✅ BluRay · CtrlHD · verified     [ktuvit]
-✅ BluRay · HALCYON · verified                    [wizdom]
-⏱ DVD→BluRay fixed ×1.043 +0.4s · SAiNTS         [wizdom]
-⚠️ HDTV · LOL · file is BluRay · verified         [wizdom]
-❔ unknown timing · Prison Break S01E06 · unverified
+⭐ best · ✅ fits · BluRay CtrlHD
+✅ fits · BluRay HALCYON
+✅ likely · BluRay ESiR
+⏱ fixed DVD→BluRay +0.4s · SAiNTS
+⚠️ wrong release · HDTV LOL
+❔ unchecked · Prison Break S01E06 [opensubtitles]
 ```
 
-- **`✅` fits** — same timing as the file. `verified` means that was measured, not assumed
-  from the release name.
-- **`⏱` re-timed** — it did not fit, the correction was measured against a subtitle that
-  does, and it has been applied. The scale and shift are shown.
-- **`⚠️` mismatch** — nothing can make it fit. It is still offered, because sometimes it is
+The verdict comes first, because it is the only part that decides anything. Your player
+already shows the language above each entry, so the label does not repeat it.
+
+- **`✅ fits`** — measured against a subtitle known to match your file.
+- **`✅ likely`** — the release name says it fits and nothing contradicted it, but no
+  measurement was possible.
+- **`⏱ fixed`** — it did not fit, the correction was measured against a subtitle that does,
+  and it has been applied. The shift is shown.
+- **`⚠️ wrong release`** — nothing can make it fit. Still offered, because sometimes it is
   the only subtitle in your language that exists.
-- **`❔` unverified** — the name says nothing and the timings could not be checked.
-- **`⭐`** — the best pick for each language, at the top of the list.
+- **`❔ unchecked`** — nothing could be settled. A subtitle whose only claim to fit is its
+  own filename, with nothing to corroborate it, lands here too: subtitle sites file the
+  occasional entry under the wrong show, and one of those should not be presented as a
+  match.
+- **`⭐ best`** — the pick for each language, at the top of the list.
 
 Duplicates are collapsed. One episode's Hebrew menu routinely carries the same file two or
 three times under different names.
@@ -84,13 +92,16 @@ them at your own instances if you run any.
 
 The first request for an episode costs whatever the slowest upstream costs, up to
 `deadlineMs`; everything after is served from a local SQLite cache in milliseconds. Subtitle
-bodies and measurements are kept for 30 days, catalogues for 6 hours. The cache lives beside
-the config and can be deleted at any time.
+bodies and measurements are kept for 30 days, catalogues and rendered menus for 6 hours. The
+cache lives beside the config and can be deleted at any time.
 
-If your setup asks `GET /<token>/families/<type>/<id>` while listing streams — it returns
-which timing families exist per language, which is useful for showing whether a release has
-subtitles at all — that call also warms the catalogue in the background, so the subtitle list
-is usually instant by the time playback starts.
+`GET /<token>/families/<type>/<id>` reports which timing families exist per language, which
+is useful for showing whether a release has subtitles at all *before* one is played. It
+**never waits on an upstream**: it answers from cache or returns `{}`, and a miss starts the
+build in the background. That is deliberate — it is read while a list of streams is being
+assembled, and one upstream has been measured at anything from 0.2 to 11 seconds for the same
+request. Calling it when the stream list opens gives the subtitle menu a head start of
+seconds before anyone presses play.
 
 ## Development
 
