@@ -20,6 +20,22 @@ const ALREADY_ALIGNED_S = 0.35;
 const RANK: Record<State, number> = { match: 3, retimed: 2, unknown: 1, mismatch: 0 };
 
 /**
+ * Whether anything other than this subtitle's own filename says it belongs to `family`.
+ *
+ * A lone subtitle claiming a release nothing else claims cannot be checked, and subtitle
+ * sites file the occasional entry under the wrong show entirely. Exported because the
+ * family counts served to a stream card must apply exactly this rule: the card and the menu
+ * disagreeing about the same subtitle is worse than either of them being cautious.
+ */
+export function isCorroborated(
+  entries: CatalogueEntry[],
+  entry: CatalogueEntry,
+  family: Family,
+): boolean {
+  return entries.some((o) => o.id !== entry.id && o.cues && o.release.family === family);
+}
+
+/**
  * The player already shows the language above each entry, so the label does not repeat it.
  * What it needs to answer, in order: will this work, and if I am choosing between two of
  * them, which release is it.
@@ -153,12 +169,9 @@ export function select(
     // against, is not a match - it is an assertion. OpenSubtitles files the occasional
     // subtitle under the wrong show, and one such entry was being advertised as the best
     // Russian match for an episode of a series it does not belong to.
-    if (state === 'match' && via === 'name') {
-      const corroborating = references.filter((r) => r.id !== entry.id).length;
-      if (corroborating === 0) {
-        state = 'unknown';
-        transform = undefined;
-      }
+    if (state === 'match' && via === 'name' && !isCorroborated(served, entry, target.family)) {
+      state = 'unknown';
+      transform = undefined;
     }
 
     return { entry, state, via, transform, label: labelFor(state, via, entry, target, transform) };

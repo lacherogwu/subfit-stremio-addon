@@ -164,7 +164,10 @@ test('once the catalogue is warm, families reports what exists per language', as
   const app = appFor();
   await listFor(BLURAY_FILE, app);
   const res = await app.request(`/${TOKEN}/families/series/tt0455275:1:6`);
-  expect(await res.json()).toEqual({ he: { BluRay: 2, DVD: 1, HDTV: 1 } });
+  // Two BluRay subtitles corroborate each other. The lone DVD and the lone HDTV entry have
+  // nothing to check them against, so they are counted as unknown rather than as the family
+  // their filename claims - exactly as the menu labels them.
+  expect(await res.json()).toEqual({ he: { BluRay: 2, unknown: 2 } });
 });
 
 test('an identical subtitle list is served from cache without rebuilding', async () => {
@@ -256,11 +259,47 @@ test('a cached menu is not reused across versions', async () => {
   // old wording on screen for the rest of the cache's life.
   const { VERSION } = await import('../src/version');
   const cache = new Cache(mkdtempSync(join(tmpdir(), 'subfit-ver-')));
-  cache.putCatalogue(`resp:0.0.0-old:series:tt0455275:1:6:BluRay`, { subtitles: [{ id: 'stale' }] });
+  cache.putCatalogue(`resp:0.0.0-old:series:tt0455275:1:6:BluRay`, {
+    subtitles: [{ id: 'stale' }],
+  });
 
   const app = appFor();
   const { body } = await listFor(BLURAY_FILE, app);
 
   expect(VERSION).not.toBe('0.0.0-old');
   expect(body.subtitles.some((s) => s.id === 'stale')).toBe(false);
+});
+
+test('the family counts a card reads never claim more than the menu offers', async () => {
+  // A subtitle that only vouches for itself is counted as unknown, exactly as the menu
+  // labels it. The two sides disagreeing about the same subtitle is the worst outcome.
+  const lone: RawSub[] = [
+    {
+      id: 'os:lone',
+      source: 'opensubtitles' as const,
+      lang: 'ru',
+      name: 'Prison.Break.Sequel.s01e06.WEB-DL.720p',
+      url: 'http://o/lone.srt',
+    },
+  ];
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-corrob-'))),
+    log: () => {},
+    fetchAll: async () => ({ subs: lone, errors: [] }),
+    fetchBody: async () => srtFor(cues.ESiR),
+  });
+
+  const file = 'Prison.Break.S01E06.1080p.WEB-DL-playWEB.mkv';
+  const menu = (await (
+    await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${file}.json`)
+  ).json()) as { subtitles: { id: string }[] };
+  const families = (await (
+    await app.request(`/${TOKEN}/families/series/tt0455275:1:6`)
+  ).json()) as Record<string, Record<string, number>>;
+
+  expect(menu.subtitles.every((s) => !s.id.includes('⭐'))).toBe(true);
+  expect(menu.subtitles.some((s) => s.id.includes('unchecked'))).toBe(true);
+  expect(families.ru?.WEB ?? 0).toBe(0);
+  expect(families.ru?.unknown).toBe(1);
 });

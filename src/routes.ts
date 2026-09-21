@@ -5,7 +5,7 @@ import type { Cache } from './cache';
 import { buildCatalogue, type CatalogueDeps, type CatalogueEntry } from './catalogue';
 import { classify, type Family } from './classify';
 import type { Config } from './config';
-import { type Disposition, select } from './select';
+import { type Disposition, isCorroborated, select } from './select';
 import { parseSubtitle, toSrt, unzipFirstSubtitle } from './subtitle';
 import { VERSION } from './version';
 
@@ -211,12 +211,19 @@ export function createApp(deps: AppDeps): Hono {
         return c.json({});
       }
       const entries = cached;
+      // Counted under exactly the rule the menu applies, so a card can never advertise a
+      // language the menu then declines to offer. A subtitle that only vouches for itself
+      // is counted as unknown rather than as its claimed family.
+      const served = entries.filter((e) => !e.duplicateOf);
       const counts: Record<string, Partial<Record<Family, number>>> = {};
-      for (const e of entries) {
-        if (e.duplicateOf) continue;
+      for (const e of served) {
+        const family =
+          e.release.family !== 'unknown' && !isCorroborated(served, e, e.release.family)
+            ? 'unknown'
+            : e.release.family;
         const perLang = counts[e.lang] ?? {};
         counts[e.lang] = perLang;
-        perLang[e.release.family] = (perLang[e.release.family] ?? 0) + 1;
+        perLang[family] = (perLang[family] ?? 0) + 1;
       }
       return c.json(counts);
     } catch {
