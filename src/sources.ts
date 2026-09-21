@@ -104,7 +104,16 @@ export async function fetchAll(
   results.forEach((result, i) => {
     const name = entries[i]?.[0] ?? 'unknown';
     if (result.status === 'fulfilled') subs.push(...result.value);
-    else errors.push(`${name}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+    else {
+      const reason = result.reason;
+      const message =
+        reason instanceof Error && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
+          ? 'took too long, skipped'
+          : reason instanceof Error
+            ? reason.message
+            : String(reason);
+      errors.push(`${name}: ${message}`);
+    }
   });
 
   return { subs, errors };

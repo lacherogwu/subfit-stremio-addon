@@ -38,6 +38,28 @@ const MIN_CUES = 5;
 const MAX_OFFSET_S = 600;
 /** How many of the most-voted offsets to score exactly, per ratio. */
 const CANDIDATES = 6;
+/**
+ * Offsets are *proposed* from a sample of the source cues and then *scored* against all of
+ * them. A true offset is shared by hundreds of cues, so a few dozen are more than enough to
+ * nominate it, and the expensive all-pairs pass shrinks by an order of magnitude without
+ * changing any answer.
+ */
+const VOTERS = 60;
+/** A fit this good ends the search: no other frame-rate ratio can improve on it. */
+const DECISIVE = 0.98;
+
+/**
+ * Byte-identical timing, which is what a re-upload of the same file looks like. Checked
+ * directly rather than through `align`, because it is the most common relationship in a
+ * subtitle menu and answering it costs one pass instead of nine.
+ */
+export function identicalTiming(a: number[], b: number[], tolerance = 0.05): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (Math.abs((a[i] as number) - (b[i] as number)) > tolerance) return false;
+  }
+  return true;
+}
 
 const nearestWithin = (sorted: number[], value: number, tolerance: number): boolean => {
   let lo = 0;
@@ -70,10 +92,16 @@ export function align(a: number[], b: number[]): Alignment {
   let best = none;
 
   for (const scale of FPS_RATIOS) {
+    // Same-frame-rate pairs are the overwhelming majority, and a near-perfect fit at ratio
+    // 1 cannot be beaten by another ratio. Stopping there turns the common case into one
+    // pass instead of nine.
+    if (best.matchPct >= DECISIVE) break;
     const scaled = a.map((t) => t * scale);
+    const step = Math.max(1, Math.ceil(scaled.length / VOTERS));
+    const voters = scaled.filter((_, i) => i % step === 0);
 
     const votes = new Map<number, number>();
-    for (const x of scaled) {
+    for (const x of voters) {
       for (const y of target) {
         const d = y - x;
         if (d < -MAX_OFFSET_S || d > MAX_OFFSET_S) continue;

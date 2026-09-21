@@ -26,9 +26,11 @@ export interface Config {
   /** Languages to serve, in preference order. Each gets its own best-match entry. */
   languages: string[];
   /**
-   * How long the subtitle list may spend downloading bodies before answering with whatever
-   * it has. Names are classified for free; bodies buy dedupe and re-timing. Staying well
-   * inside the caller's timeout matters more than classifying every last entry.
+   * The whole budget for answering a subtitle list: upstream lists and subtitle bodies
+   * together. Whatever has not arrived by then is answered without - names are classified
+   * for free, and bodies only buy dedupe and re-timing. Staying inside the player's own
+   * timeout matters more than measuring every last entry, and the background warm-up will
+   * finish the job before the next request anyway.
    */
   deadlineMs: number;
   /** Fields that failed validation and fell back to their default, one message each. */
@@ -44,7 +46,7 @@ const DEFAULTS: Omit<Config, 'token' | 'configIssues' | 'logFile'> = {
       'https://opensubtitles.stremio.homes/en%7Che%7Cru/ai-translated=false%7Cfrom=all',
   },
   languages: ['en', 'he', 'ru'],
-  deadlineMs: 5000,
+  deadlineMs: 9000,
 };
 
 const SourcesSchema = z.object({
