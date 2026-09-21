@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { type Context, Hono } from 'hono';
 import { applyAlignment } from './align';
 import type { Cache } from './cache';
-import { buildCatalogue, type CatalogueDeps } from './catalogue';
+import { buildCatalogue, type CatalogueDeps, type CatalogueEntry } from './catalogue';
 import { classify, type Family } from './classify';
 import type { Config } from './config';
 import { type Disposition, select } from './select';
@@ -35,8 +35,6 @@ const srtHeaders = (): Record<string, string> => ({
   'content-type': 'text/plain; charset=utf-8',
 });
 
-/** The family lookup answers a stream list, so it must never be the slow part of one. */
-const FAMILIES_BUDGET_MS = 1000;
 /**
  * The warm-up that the family lookup kicks off has nobody waiting on it, and it runs while
  * someone is still reading a list of streams. It can afford to wait out a slow upstream.
@@ -97,6 +95,17 @@ export function createApp(deps: AppDeps): Hono {
     extras: string,
   ): Promise<Response> => {
     const target = classify(parseExtras(extras).filename ?? '');
+
+    // The finished menu is cached per file family, not just the catalogue it was built
+    // from: turning a catalogue into a labelled, ranked list means measuring every subtitle
+    // against the ones that fit, and that work was being redone on every request.
+    const responseKey = `resp:${type}:${id}:${target.family}`;
+    const ready = cache.getCatalogue<{ subtitles: unknown[] }>(responseKey);
+    if (ready) {
+      log(`subtitles ${type}/${id} target=${target.family} → cached`);
+      return c.json(ready);
+    }
+
     const { entries, errors } = await buildCatalogue(deps, cfg, type, id, extras, {
       targetFamily: target.family,
     });
@@ -129,6 +138,9 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     log(`subtitles ${type}/${id} target=${target.family} → ${subtitles.length} entries`);
+    // Only a menu built from a complete catalogue is worth keeping; one assembled while an
+    // upstream was failing would otherwise be served for hours.
+    if (errors.length === 0 && subtitles.length > 0) cache.putCatalogue(responseKey, { subtitles });
     return c.json({ subtitles });
   };
 
@@ -181,19 +193,22 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/:token/families/:type/:id', async (c) => {
     const type = c.req.param('type');
     const id = (c.req.param('id') ?? '').replace(/\.json$/, '');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FAMILIES_BUDGET_MS);
     try {
-      // Names alone are enough to say which families exist, and they cost one round trip.
-      // The full measured catalogue is built in the background, so it is usually already
-      // warm by the time someone presses play on one of the streams this list just tagged.
-      const { entries } = await buildCatalogue(deps, cfg, type, id, '', {
-        signal: controller.signal,
-        namesOnly: true,
-      });
-      void buildCatalogue(deps, cfg, type, id, '', { deadlineMs: BACKGROUND_BUDGET_MS }).catch(
-        () => {},
-      );
+      // Answered from cache or not at all. This is read while a *stream list* is being
+      // built, and a stream list must never wait on a subtitle lookup: the upstreams have
+      // been measured at anything from 0.2 to 11 seconds, and a partial answer changes
+      // between refreshes, which is worse than no answer.
+      const cached = deps.cache.getCatalogue<CatalogueEntry[]>(`${type}:${id}`);
+      if (!cached) {
+        // Nothing yet, so start building it. This call happens when someone opens the list
+        // of streams for an episode, seconds before they press play on one of them, which
+        // is exactly the head start the subtitle list needs.
+        void buildCatalogue(deps, cfg, type, id, '', { deadlineMs: BACKGROUND_BUDGET_MS }).catch(
+          () => {},
+        );
+        return c.json({});
+      }
+      const entries = cached;
       const counts: Record<string, Partial<Record<Family, number>>> = {};
       for (const e of entries) {
         if (e.duplicateOf) continue;
@@ -204,8 +219,6 @@ export function createApp(deps: AppDeps): Hono {
       return c.json(counts);
     } catch {
       return c.json({});
-    } finally {
-      clearTimeout(timer);
     }
   });
 

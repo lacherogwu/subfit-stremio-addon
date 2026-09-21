@@ -152,10 +152,52 @@ test('an unknown subtitle key is a clean 404', async () => {
   expect((await appFor().request(`/${TOKEN}/sub/deadbeef.srt`)).status).toBe(404);
 });
 
-test('the families endpoint reports what exists per language', async () => {
+test('the families endpoint answers nothing rather than making a stream list wait', async () => {
+  // It is read while a stream list is being built. A partial answer changes between
+  // refreshes, and waiting for a slow upstream is worse than saying nothing at all.
   const res = await appFor().request(`/${TOKEN}/families/series/tt0455275:1:6`);
   expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({});
+});
+
+test('once the catalogue is warm, families reports what exists per language', async () => {
+  const app = appFor();
+  await listFor(BLURAY_FILE, app);
+  const res = await app.request(`/${TOKEN}/families/series/tt0455275:1:6`);
   expect(await res.json()).toEqual({ he: { BluRay: 2, DVD: 1, HDTV: 1 } });
+});
+
+test('an identical subtitle list is served from cache without rebuilding', async () => {
+  const subs: RawSub[] = CATALOGUE.map(([name], i) => ({
+    id: `wizdom:${i}`,
+    source: 'wizdom' as const,
+    lang: 'he',
+    name,
+    url: `http://w/${i}.srt`,
+  }));
+  let builds = 0;
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-respcache-'))),
+    log: () => {},
+    fetchAll: async () => {
+      builds++;
+      return { subs, errors: [] };
+    },
+    fetchBody: async (url: string) => {
+      const i = Number(/\/(\d+)\.srt$/.exec(url)?.[1] ?? -1);
+      const entry = CATALOGUE[i];
+      if (!entry) throw new Error('no such fixture');
+      return srtFor(entry[1]);
+    },
+  });
+
+  const path = `/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${BLURAY_FILE}.json`;
+  const first = (await (await app.request(path)).json()) as { subtitles: unknown[] };
+  const second = (await (await app.request(path)).json()) as { subtitles: unknown[] };
+
+  expect(builds).toBe(1);
+  expect(second.subtitles).toEqual(first.subtitles);
 });
 
 test('a subtitle request with no extras still answers', async () => {
