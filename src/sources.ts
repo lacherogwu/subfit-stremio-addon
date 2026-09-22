@@ -1,11 +1,10 @@
 import type { Config } from './config';
 
-export type SourceName = 'wizdom' | 'ktuvit' | 'opensubtitles';
-
 export interface RawSub {
   /** Stable within a source; combined with the source it identifies a subtitle for us. */
   id: string;
-  source: SourceName;
+  /** The configured name of the addon that supplied it. */
+  source: string;
   /** Two-letter code. */
   lang: string;
   /** The release the subtitle was timed for, as the upstream states it. */
@@ -52,7 +51,7 @@ const buildUrl = (base: string, type: string, id: string, extras: string): strin
 };
 
 async function fetchOne(
-  source: SourceName,
+  source: string,
   base: string,
   type: string,
   id: string,
@@ -91,16 +90,14 @@ export async function fetchAll(
   extras: string,
   signal?: AbortSignal,
 ): Promise<{ subs: RawSub[]; errors: string[] }> {
-  const entries = Object.entries(cfg.sources) as [SourceName, string][];
-
   const results = await Promise.allSettled(
-    entries.map(([name, base]) => fetchOne(name, base, type, id, extras, cfg.languages, signal)),
+    cfg.sources.map((s) => fetchOne(s.name, s.url, type, id, extras, cfg.languages, signal)),
   );
 
   const subs: RawSub[] = [];
   const errors: string[] = [];
   results.forEach((result, i) => {
-    const name = entries[i]?.[0] ?? 'unknown';
+    const name = cfg.sources[i]?.name ?? 'unknown';
     if (result.status === 'fulfilled') subs.push(...result.value);
     else {
       const reason = result.reason;

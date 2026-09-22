@@ -78,15 +78,35 @@ falls back to its default and says so in the log rather than stopping the servic
 |---|---|---|
 | `port` | `18702` | |
 | `token` | generated | Path prefix for every route. |
-| `languages` | `["en","he","ru"]` | Which languages to serve, in preference order. Each gets its own `⭐`. |
+| `languages` | `["en"]` | Which languages to serve, in preference order. Each gets its own `⭐`. |
 | `deadlineMs` | `9000` | Whole budget for answering a subtitle list, upstream lists and bodies together. |
-| `sources.wizdom` | public instance | Any addon speaking the Stremio subtitle protocol. |
-| `sources.ktuvit` | public instance | |
-| `sources.opensubtitles` | public instance | |
+| `sources` | one public OpenSubtitles instance | The addons to ask. Any number, in any order. |
 | `logFile` | in the config dir | |
 
-Upstreams are called as addons, not scraped, so no accounts or API keys are involved. Point
-them at your own instances if you run any.
+### Sources
+
+`sources` is a list, not a fixed set: which subtitle addons are worth asking depends entirely
+on what you watch. Each entry is a name and the base URL of anything speaking the Stremio
+subtitle protocol.
+
+```json
+{
+  "languages": ["en", "he", "ru"],
+  "sources": [
+    { "name": "wizdom", "url": "https://4b139a4b7f94-wizdom-stremio-v2.baby-beamup.club" },
+    { "name": "ktuvit", "url": "https://4b139a4b7f94-ktuvit-stremio.baby-beamup.club" },
+    { "name": "opensubtitles", "url": "https://opensubtitles.stremio.homes/en%7Che%7Cru/ai-translated=false%7Cfrom=all" }
+  ]
+}
+```
+
+The name is what appears beside a subtitle that could not be settled, so you know who
+supplied it. Upstreams are called as addons, not scraped, so no accounts or API keys are
+involved — point them at your own instances if you run any.
+
+More sources means better coverage and slower first builds; measurements only get better
+with more subtitles to compare against, since a subtitle is judged by how it lines up with
+the others.
 
 ### Speed
 

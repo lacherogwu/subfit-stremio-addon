@@ -13,7 +13,11 @@ const cfg: Config = {
   baseUrl: '',
   token: 't',
   logFile: '',
-  sources: { wizdom: 'http://w', ktuvit: 'http://k', opensubtitles: 'http://o' },
+  sources: [
+    { name: 'wizdom', url: 'http://w' },
+    { name: 'ktuvit', url: 'http://k' },
+    { name: 'opensubtitles', url: 'http://o' },
+  ],
   languages: ['en', 'he', 'ru'],
   deadlineMs: 5000,
   configIssues: [],

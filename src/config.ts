@@ -6,10 +6,11 @@ import { z } from 'zod';
 
 export const CONFIG_DIR: string = process.env.SUBFIT_DIR || join(homedir(), '.config', 'subfit');
 
-export interface Sources {
-  wizdom: string;
-  ktuvit: string;
-  opensubtitles: string;
+export interface Source {
+  /** Shown beside a subtitle that could not be settled, so you know who supplied it. */
+  name: string;
+  /** Base URL of any addon speaking the Stremio subtitle protocol. */
+  url: string;
 }
 
 export interface Config {
@@ -18,10 +19,11 @@ export interface Config {
   logFile: string;
   /**
    * Upstream addons, wrapped over the Stremio protocol rather than scraped, so no
-   * credentials are ever needed. These are defaults, not constants: anyone self-hosting
-   * their own instance of an upstream should be able to point at it without editing source.
+   * credentials are ever needed. Any number of them, in any order: this is a list rather
+   * than a fixed set of named slots, because which subtitle addons are worth asking depends
+   * entirely on which languages someone watches in.
    */
-  sources: Sources;
+  sources: Source[];
   /**
    * Public address this service is reached at, if it differs from the address a caller
    * used. Subtitle URLs are handed to a *player*, which may be a television on the other
@@ -49,28 +51,26 @@ export interface Config {
 const DEFAULTS: Omit<Config, 'token' | 'configIssues' | 'logFile'> = {
   port: 18702,
   baseUrl: '',
-  sources: {
-    wizdom: 'https://4b139a4b7f94-wizdom-stremio-v2.baby-beamup.club',
-    ktuvit: 'https://4b139a4b7f94-ktuvit-stremio.baby-beamup.club',
-    opensubtitles:
-      'https://opensubtitles.stremio.homes/en%7Che%7Cru/ai-translated=false%7Cfrom=all',
-  },
-  languages: ['en', 'he', 'ru'],
+  // OpenSubtitles alone by default: it is public, needs no account and covers most
+  // languages. Anything else is a matter of what you watch - see the README.
+  sources: [
+    {
+      name: 'opensubtitles',
+      url: 'https://opensubtitles.stremio.homes/en/ai-translated=false%7Cfrom=all',
+    },
+  ],
+  languages: ['en'],
   deadlineMs: 9000,
 };
 
-const SourcesSchema = z.object({
-  wizdom: z.string().url(),
-  ktuvit: z.string().url(),
-  opensubtitles: z.string().url(),
-});
+const SourceSchema = z.object({ name: z.string().min(1), url: z.string().url() });
 
 const Schema = z.object({
   port: z.number().int().min(1).max(65535),
   baseUrl: z.string(),
   token: z.string().min(16),
   logFile: z.string().min(1),
-  sources: SourcesSchema,
+  sources: z.array(SourceSchema).min(1),
   languages: z.array(z.string().min(2)).min(1),
   deadlineMs: z.number().int().min(500).max(30000),
 });
@@ -91,6 +91,22 @@ export function loadConfig(dir: string = CONFIG_DIR): Config {
       raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
     } catch (err) {
       issues.push(`config.json is not valid JSON (${String(err)}); using defaults`);
+    }
+  }
+
+  // Sources used to be three fixed keys. Anyone upgrading has that shape on disk, and
+  // silently dropping their configured upstreams would leave them wondering where their
+  // subtitles went, so it is converted rather than rejected.
+  if (raw.sources && !Array.isArray(raw.sources) && typeof raw.sources === 'object') {
+    const legacy = raw.sources as Record<string, unknown>;
+    const converted = Object.entries(legacy)
+      .filter(([, url]) => typeof url === 'string' && url.length > 0)
+      .map(([name, url]) => ({ name, url: url as string }));
+    if (converted.length > 0) {
+      raw.sources = converted;
+      issues.push(
+        `config.json: sources was a list of named keys and has been converted to a list of ${converted.length}`,
+      );
     }
   }
 

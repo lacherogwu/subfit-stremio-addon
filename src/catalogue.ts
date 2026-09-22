@@ -2,12 +2,12 @@ import { align, identicalTiming } from './align';
 import type { Cache } from './cache';
 import { classify, type Release } from './classify';
 import type { Config } from './config';
-import type { RawSub, fetchAll as realFetchAll, SourceName } from './sources';
+import type { RawSub, fetchAll as realFetchAll } from './sources';
 import { parseSubtitle, unzipFirstSubtitle } from './subtitle';
 
 export interface CatalogueEntry {
   id: string;
-  source: SourceName;
+  source: string;
   lang: string;
   name: string;
   url: string;

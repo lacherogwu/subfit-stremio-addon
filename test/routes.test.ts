@@ -18,7 +18,11 @@ const cfg: Config = {
   baseUrl: '',
   token: TOKEN,
   logFile: '',
-  sources: { wizdom: 'http://w', ktuvit: 'http://k', opensubtitles: 'http://o' },
+  sources: [
+    { name: 'wizdom', url: 'http://w' },
+    { name: 'ktuvit', url: 'http://k' },
+    { name: 'opensubtitles', url: 'http://o' },
+  ],
   languages: ['en', 'he', 'ru'],
   deadlineMs: 5000,
   configIssues: [],
@@ -160,14 +164,18 @@ test('the families endpoint answers nothing rather than making a stream list wai
   expect(await res.json()).toEqual({});
 });
 
-test('once the catalogue is warm, families reports what exists per language', async () => {
+test('once warm, the lookup says what the menu would offer, per release family', async () => {
   const app = appFor();
   await listFor(BLURAY_FILE, app);
   const res = await app.request(`/${TOKEN}/families/series/tt0455275:1:6`);
-  // Two BluRay subtitles corroborate each other. The lone DVD and the lone HDTV entry have
-  // nothing to check them against, so they are counted as unknown rather than as the family
-  // their filename claims - exactly as the menu labels them.
-  expect(await res.json()).toEqual({ he: { BluRay: 2, unknown: 2 } });
+  const fits = (await res.json()) as Record<string, Record<string, string>>;
+
+  // Playing a BluRay: the BluRay subtitles fit outright. Playing a DVD: nothing is timed
+  // for one, but the BluRay entries can be corrected onto it, so it is 'fixed' rather than
+  // 'wrong' - the distinction the old count-based answer could not express.
+  expect(fits.he?.BluRay).toBe('fits');
+  expect(fits.he?.DVD).toBe('fixed');
+  expect(fits.he?.WEB).toBe('wrong');
 });
 
 test('an identical subtitle list is served from cache without rebuilding', async () => {
@@ -296,10 +304,10 @@ test('the family counts a card reads never claim more than the menu offers', asy
   ).json()) as { subtitles: { id: string }[] };
   const families = (await (
     await app.request(`/${TOKEN}/families/series/tt0455275:1:6`)
-  ).json()) as Record<string, Record<string, number>>;
+  ).json()) as Record<string, Record<string, string>>;
 
   expect(menu.subtitles.every((s) => !s.id.includes('⭐'))).toBe(true);
   expect(menu.subtitles.some((s) => s.id.includes('unchecked'))).toBe(true);
-  expect(families.ru?.WEB ?? 0).toBe(0);
-  expect(families.ru?.unknown).toBe(1);
+  // The menu will not offer it, so the card must not advertise it.
+  expect(families.ru?.WEB).not.toBe('fits');
 });

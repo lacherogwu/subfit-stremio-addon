@@ -5,7 +5,7 @@ import type { Cache } from './cache';
 import { buildCatalogue, type CatalogueDeps, type CatalogueEntry } from './catalogue';
 import { classify, type Family } from './classify';
 import type { Config } from './config';
-import { type Disposition, isCorroborated, select } from './select';
+import { type Disposition, fitByLanguage, select } from './select';
 import { parseSubtitle, toSrt, unzipFirstSubtitle } from './subtitle';
 import { VERSION } from './version';
 
@@ -192,14 +192,19 @@ export function createApp(deps: AppDeps): Hono {
    * Which timing families exist for a title, per language. Read by the stream list, so it
    * answers from cache or gives up: a subtitle lookup must never hold up a list of streams.
    */
+  /**
+   * What the subtitle menu would offer for this title, per language and per release family:
+   * `fits`, `fixed` (a correction was measured and will be applied) or `wrong`.
+   *
+   * Answered from cache or not at all. It is read while a *stream list* is being built, and
+   * a stream list must never wait on a subtitle lookup: the upstreams have been measured at
+   * anything from 0.2 to 11 seconds, and a partial answer changes between refreshes, which
+   * is worse than no answer.
+   */
   app.get('/:token/families/:type/:id', async (c) => {
     const type = c.req.param('type');
     const id = (c.req.param('id') ?? '').replace(/\.json$/, '');
     try {
-      // Answered from cache or not at all. This is read while a *stream list* is being
-      // built, and a stream list must never wait on a subtitle lookup: the upstreams have
-      // been measured at anything from 0.2 to 11 seconds, and a partial answer changes
-      // between refreshes, which is worse than no answer.
       const cached = deps.cache.getCatalogue<CatalogueEntry[]>(`${type}:${id}`);
       if (!cached) {
         // Nothing yet, so start building it. This call happens when someone opens the list
@@ -210,22 +215,14 @@ export function createApp(deps: AppDeps): Hono {
         );
         return c.json({});
       }
-      const entries = cached;
-      // Counted under exactly the rule the menu applies, so a card can never advertise a
-      // language the menu then declines to offer. A subtitle that only vouches for itself
-      // is counted as unknown rather than as its claimed family.
-      const served = entries.filter((e) => !e.duplicateOf);
-      const counts: Record<string, Partial<Record<Family, number>>> = {};
-      for (const e of served) {
-        const family =
-          e.release.family !== 'unknown' && !isCorroborated(served, e, e.release.family)
-            ? 'unknown'
-            : e.release.family;
-        const perLang = counts[e.lang] ?? {};
-        counts[e.lang] = perLang;
-        perLang[family] = (perLang[family] ?? 0) + 1;
-      }
-      return c.json(counts);
+
+      const key = `fit:${VERSION}:${type}:${id}`;
+      const ready = cache.getCatalogue<Record<string, unknown>>(key);
+      if (ready) return c.json(ready);
+
+      const fits = fitByLanguage(cached, cfg.languages);
+      cache.putCatalogue(key, fits);
+      return c.json(fits);
     } catch {
       return c.json({});
     }

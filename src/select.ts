@@ -191,3 +191,44 @@ export function select(
 }
 
 export type { Family };
+
+/** What the menu can offer for a language, against a given release family. */
+export type Fit = 'fits' | 'fixed' | 'wrong';
+
+const FAMILIES: Family[] = ['WEB', 'BluRay', 'HDTV', 'DVD'];
+
+/**
+ * What the subtitle menu *would* say, per language, for each release family.
+ *
+ * A stream card used to answer this by counting subtitles per declared family, which got
+ * two things wrong: a subtitle whose filename says nothing but whose timing proves it
+ * belongs was invisible, and one that needs a correction the service can measure and apply
+ * was reported as not fitting at all. Both were cases where the card said "wrong release"
+ * while the menu happily offered a working subtitle.
+ *
+ * So the card now asks the menu the question directly, for every family it might meet.
+ */
+export function fitByLanguage(
+  entries: CatalogueEntry[],
+  languages: string[],
+): Record<string, Partial<Record<Family, Fit>>> {
+  const out: Record<string, Partial<Record<Family, Fit>>> = {};
+
+  for (const family of FAMILIES) {
+    const { list } = select(entries, { family }, languages);
+    for (const lang of languages) {
+      const forLang = list.filter((d) => d.entry.lang === lang);
+      if (forLang.length === 0) continue;
+      const fit: Fit = forLang.some((d) => d.state === 'match')
+        ? 'fits'
+        : forLang.some((d) => d.state === 'retimed')
+          ? 'fixed'
+          : 'wrong';
+      const perLang = out[lang] ?? {};
+      out[lang] = perLang;
+      perLang[family] = fit;
+    }
+  }
+
+  return out;
+}
