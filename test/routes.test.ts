@@ -159,7 +159,7 @@ test('an unknown subtitle key is a clean 404', async () => {
 test('the families endpoint answers nothing rather than making a stream list wait', async () => {
   // It is read while a stream list is being built. A partial answer changes between
   // refreshes, and waiting for a slow upstream is worse than saying nothing at all.
-  const res = await appFor().request(`/${TOKEN}/families/series/tt0455275:1:6`);
+  const res = await appFor().request(`/${TOKEN}/fit/series/tt0455275:1:6`);
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({});
 });
@@ -167,7 +167,7 @@ test('the families endpoint answers nothing rather than making a stream list wai
 test('once warm, the lookup says what the menu would offer, per release family', async () => {
   const app = appFor();
   await listFor(BLURAY_FILE, app);
-  const res = await app.request(`/${TOKEN}/families/series/tt0455275:1:6`);
+  const res = await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`);
   const fits = (await res.json()) as Record<string, Record<string, string>>;
 
   // Playing a BluRay or a DVD, the subtitle timed for that source fits outright. Playing a
@@ -302,7 +302,7 @@ test('the family counts a card reads never claim more than the menu offers', asy
     await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${file}.json`)
   ).json()) as { subtitles: { id: string }[] };
   const families = (await (
-    await app.request(`/${TOKEN}/families/series/tt0455275:1:6`)
+    await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)
   ).json()) as Record<string, Record<string, string>>;
 
   expect(menu.subtitles.every((s) => !s.id.includes('⭐'))).toBe(true);

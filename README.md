@@ -40,16 +40,72 @@ three times under different names.
 
 ## How it decides
 
+**Subtitles are compared against each other, never against the video.** Every other tool in
+this space aligns a subtitle to the film's audio, which means downloading the film first —
+impossible when you are about to stream it. But subtitles for the same source share a
+timeline, so they can be used as each other's reference: the ones that agree with each other
+describe the same cut, and a file's release name says which cut it is.
+
 Two subtitles are compared by cross-correlating their cue times over a short list of
 frame-rate ratios (25/23.976 and friends) and every plausible offset, scoring the fraction of
-cues that land on each other. Measured on real files, two BluRay rips from different groups
-agree at ~90%, a PAL DVD subtitle reaches 99.5% once stretched by 25/23.976, and an HDTV
-subtitle against a BluRay one peaks at ~37% *at every ratio and offset* — the cut genuinely
-differs, so no single correction exists. That gap is why the threshold sits in the middle of
-it, and why subfit refuses to "fix" the last case instead of guessing.
+cues that land on each other. Measured on real files:
 
-Nothing is ever hidden. A subtitle that cannot be made to fit is labelled, not dropped, and
-an upstream that fails appears in the list as an error entry rather than as a shorter menu.
+| | Match | What it means |
+|---|---|---|
+| Two BluRay rips, different groups | **90%** at ratio 1 | same cut — interchangeable |
+| PAL DVD → BluRay | **99.5%** stretched by 25/23.976 | same cut, different frame rate — correctable |
+| HDTV → BluRay | **37%** at *every* ratio and offset | genuinely different cut — no correction exists |
+
+That gap is why the confidence threshold sits at 0.70, in the empty middle, and why subfit
+labels the last case rather than "fixing" it.
+
+Two promises hold everywhere:
+
+- **Nothing is reported that was not established.** A subtitle nobody could measure says
+  `unchecked`; it is never condemned as the wrong release, and never starred.
+- **Nothing that exists is hidden.** A subtitle that cannot be made to fit is still offered,
+  labelled. An upstream that fails appears as an error entry, not as a shorter menu.
+
+## When it cannot help
+
+| Situation | What you see | Why |
+|---|---|---|
+| No subtitle was ever made for your release's source | everything `⚠️ wrong release`, no star | The catalogue for pre-2010 titles predates streaming releases entirely; a 2005 episode may have BluRay, HDTV and DVD subtitles and **no** WEB ones. Play a release the card marks `✅`. |
+| An upstream is slow or down | an `❌` entry naming it, plus everything that did arrive | One public source measures 3–11 s for the same request. A budget protects the response. |
+| A subtitle file will not download | still offered, `✅ likely`, judged by its name | The download failing is this service's problem, not evidence against the subtitle. |
+| A subtitle has a handful of cues (forced subtitles) | `❔ unchecked` | Too little signal to tell alignment from coincidence. |
+| A subtitle is filed under the wrong show | `❔ unchecked`, never starred | Its timings line up with nothing else for the episode, which is what gives it away. |
+| Your player sends no filename | everything listed, all `❔ unchecked`, nothing starred | Nothing is known about the file, so nothing may be recommended for it. |
+| A very large old catalogue, first view | ~20 s once, then milliseconds | 126 subtitles to fetch and measure. Cached afterwards. |
+
+## How this differs from the alternatives
+
+Subtitle synchronisation is a well-served problem **for files you already have**:
+
+- **[alass](https://github.com/kaegi/alass)** and **[ffsubsync](https://github.com/smacke/ffsubsync)**
+  align a subtitle against a video's audio. Excellent, and both need the video.
+- **[Bazarr](https://www.bazarr.media/)** scores subtitles by release name and can then sync
+  them with alass or ffsubsync. It is built around a Sonarr/Radarr library on disk.
+  ([Sub-Zero](https://github.com/pannal/sub-zero.bundle), the Plex equivalent, was archived
+  in 2024 in favour of it.)
+- **Stremio subtitle addons** fetch and list; the closest relatives are
+  [StremioSubtitlesSync](https://github.com/rples/StremioSubtitlesSync) (OpenSubtitles only,
+  needs a hash or a debrid account) and
+  [subtrans-stremio](https://github.com/hcdbp24c3/subtrans-stremio) (aligns by video
+  *duration*, which cannot fix a recap offset).
+
+subfit sits in the gap: **the file is a stream you have not downloaded**, so there is no
+audio to align against and no hash to look up. Using subtitles as each other's reference is
+what makes a verdict possible at all, and it is also why subfit can answer *before* playback
+begins — which no player or addon seems to do today.
+
+**What it deliberately does not do:** align against audio (the one thing that would rescue a
+release nobody subtitled), translate, or edit subtitle text.
+
+**One signal it cannot use:** OpenSubtitles' movie-hash matching, which would identify a
+subtitle made for the exact file. Players do send the hash, and subfit forwards it upstream,
+but the public OpenSubtitles addon ignores it for episodes — verified by requesting the same
+episode with and without a hash and receiving byte-identical answers.
 
 ## Running it
 
@@ -115,8 +171,9 @@ The first request for an episode costs whatever the slowest upstream costs, up t
 bodies and measurements are kept for 30 days, catalogues and rendered menus for 6 hours. The
 cache lives beside the config and can be deleted at any time.
 
-`GET /<token>/families/<type>/<id>` reports which timing families exist per language, which
-is useful for showing whether a release has subtitles at all *before* one is played. It
+`GET /<token>/fit/<type>/<id>` reports what the menu would offer per language for each
+release family — `fits`, `fixed` or `wrong` — which is what lets a stream list say whether a
+release has working subtitles *before* one is played. It
 **never waits on an upstream**: it answers from cache or returns `{}`, and a miss starts the
 build in the background. That is deliberate — it is read while a list of streams is being
 assembled, and one upstream has been measured at anything from 0.2 to 11 seconds for the same

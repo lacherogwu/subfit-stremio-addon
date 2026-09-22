@@ -121,7 +121,9 @@ export function createApp(deps: AppDeps): Hono {
       const key = refKey(d.entry.id, scale, offset);
       cache.putRef(key, { url: d.entry.url, entryId: d.entry.id, scale, offset } satisfies Ref);
       return {
-        id: `${d.label} [${d.entry.source}]`,
+        // The label names the source itself, and only where something could not be
+        // settled - appending it again here tagged every entry twice.
+        id: d.label,
         url: `${origin}/${cfg.token}/sub/${key}.srt`,
         lang: d.entry.lang,
       };
@@ -201,7 +203,7 @@ export function createApp(deps: AppDeps): Hono {
    * anything from 0.2 to 11 seconds, and a partial answer changes between refreshes, which
    * is worse than no answer.
    */
-  app.get('/:token/families/:type/:id', async (c) => {
+  app.get('/:token/fit/:type/:id', async (c) => {
     const type = c.req.param('type');
     const id = (c.req.param('id') ?? '').replace(/\.json$/, '');
     try {
