@@ -175,3 +175,49 @@ test('a subtitle that lines up with the episode is trusted, though nothing share
   expect(list.find((d) => d.entry.id === 'web')?.state).toBe('match');
   expect(stars).toHaveLength(1);
 });
+
+test('a language with something that works drops what was measured not to', () => {
+  // Known-wrong subtitles exist only to be tried and rejected, and on a phone they render
+  // as unlabelled rows indistinguishable from the good ones.
+  const { list } = select([BLURAY, BLURAY_2, HDTV], classify('Show.1080p.BluRay.x264-AAA'), ['he']);
+  expect(list.some((d) => d.state === 'match')).toBe(true);
+  expect(list.some((d) => d.state === 'mismatch')).toBe(false);
+});
+
+test('a language with nothing that works keeps everything', () => {
+  // The least-bad option is still the only option.
+  const target = classify('Prison.Break.S01E06.1080p.DSNP.WEB-DL-playWEB.mkv');
+  const { list } = select([BLURAY, HDTV, DVD], target, ['he']);
+  expect(list).toHaveLength(3);
+  expect(list.every((d) => d.state === 'mismatch')).toBe(true);
+});
+
+test('what could not be checked is kept as a suggestion, below what works', () => {
+  const unverifiable = entry('Prison Break S01E06', undefined, 'he', 'vague');
+  const { list } = select(
+    [BLURAY, BLURAY_2, unverifiable, HDTV],
+    classify('Show.1080p.BluRay.x264-AAA'),
+    ['he'],
+  );
+  const states = list.map((d) => d.state);
+  expect(states).toContain('unknown');
+  expect(states).not.toContain('mismatch');
+  // Known-good first, unchecked after.
+  expect(states.indexOf('unknown')).toBeGreaterThan(states.lastIndexOf('match'));
+});
+
+test('dropping is per language, not across the menu', () => {
+  const englishWorks = entry('Show.720p.BluRay-EN', cues.HALCYON, 'en', 'en-ok');
+  // Something for the English one to be corroborated by; without it, a lone subtitle is
+  // unverifiable rather than a match, which is a different rule doing its job.
+  const englishToo = entry('Show.720p.BluRay-EN2', cues.ESiR, 'en', 'en-ok-2');
+  const hebrewDoesNot = entry('Show.S01E06.hdtv-LOL', cues['hdtv-LOL'], 'he', 'he-bad');
+  const { list } = select(
+    [englishWorks, englishToo, hebrewDoesNot],
+    classify('Show.1080p.BluRay.x264-AAA'),
+    ['en', 'he'],
+  );
+  // English has something that works, Hebrew does not — so Hebrew keeps its only option.
+  expect(list.find((d) => d.entry.id === 'en-ok')?.state).toBe('match');
+  expect(list.find((d) => d.entry.id === 'he-bad')).toBeDefined();
+});

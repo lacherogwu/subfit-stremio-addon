@@ -194,17 +194,27 @@ export function select(
     return { entry, state, via, transform, label: labelFor(state, via, entry, target, transform) };
   });
 
+  // Three tiers, by what is actually known. A subtitle measured not to fit is dropped -
+  // but only where that language has something that does, because the least-bad option is
+  // still the only option when there is nothing better. A subtitle that could not be
+  // checked is always kept: not knowing is not a reason to decide for someone.
+  const offered = list.filter((d) => {
+    if (d.state !== 'mismatch') return true;
+    const sameLanguage = list.filter((o) => o.entry.lang === d.entry.lang);
+    return !sameLanguage.some((o) => o.state === 'match' || o.state === 'retimed');
+  });
+
   const stars: Disposition[] = [];
   for (const lang of languages) {
-    const candidates = list
+    const candidates = offered
       .filter((d) => d.entry.lang === lang && (d.state === 'match' || d.state === 'retimed'))
       .sort((a, b) => tieBreak(a, b, target));
     const best = candidates[0];
     if (best) stars.push({ ...best, label: `⭐ best match · ${best.label}` });
   }
 
-  list.sort((a, b) => tieBreak(a, b, target));
-  return { list, stars };
+  offered.sort((a, b) => tieBreak(a, b, target));
+  return { list: offered, stars };
 }
 
 export type { Family };
