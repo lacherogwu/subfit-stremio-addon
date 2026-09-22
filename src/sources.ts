@@ -32,17 +32,66 @@ const stripPrefix = (id: string): string => {
   return id;
 };
 
-/** ISO 639-2 is what the addons speak; everything downstream speaks two-letter codes. */
+/**
+ * Addons speak ISO 639-2, configuration is usually written in 639-1, and the two must meet
+ * somewhere. Both sides are normalised through this table, so `pt` in a config finds `por`
+ * from an upstream.
+ *
+ * An unrecognised code passes through unchanged rather than being dropped: someone watching
+ * in a language this table has never heard of should still get their subtitles, and a
+ * missing row here must never silently hide one.
+ */
 const LANGS: Record<string, string> = {
-  heb: 'he',
-  he: 'he',
+  ara: 'ar',
+  bul: 'bg',
+  ces: 'cs',
+  cze: 'cs',
+  dan: 'da',
+  deu: 'de',
+  dut: 'nl',
+  ell: 'el',
   eng: 'en',
-  en: 'en',
+  est: 'et',
+  fas: 'fa',
+  fin: 'fi',
+  fra: 'fr',
+  fre: 'fr',
+  ger: 'de',
+  gre: 'el',
+  heb: 'he',
+  hin: 'hi',
+  hrv: 'hr',
+  hun: 'hu',
+  ind: 'id',
+  ita: 'it',
+  jpn: 'ja',
+  kor: 'ko',
+  lav: 'lv',
+  lit: 'lt',
+  nld: 'nl',
+  nor: 'no',
+  per: 'fa',
+  pol: 'pl',
+  por: 'pt',
+  ron: 'ro',
+  rum: 'ro',
   rus: 'ru',
-  ru: 'ru',
+  slk: 'sk',
+  slo: 'sk',
+  slv: 'sl',
+  spa: 'es',
+  srp: 'sr',
+  swe: 'sv',
+  tha: 'th',
+  tur: 'tr',
+  ukr: 'uk',
+  vie: 'vi',
+  zho: 'zh',
+  chi: 'zh',
 };
 
-const normaliseLang = (lang: string): string => LANGS[lang.toLowerCase()] ?? lang.toLowerCase();
+export const normaliseLang = (lang: string): string =>
+  LANGS[lang.trim().toLowerCase()] ?? lang.trim().toLowerCase();
 
 const buildUrl = (base: string, type: string, id: string, extras: string): string => {
   const root = base.replace(/\/$/, '');
@@ -72,7 +121,8 @@ async function fetchOne(
   for (const s of subs) {
     if (typeof s.url !== 'string' || typeof s.id !== 'string') continue;
     const lang = normaliseLang(typeof s.lang === 'string' ? s.lang : '');
-    if (!languages.includes(lang)) continue;
+    // Both sides normalised, so a config written in either standard finds the subtitle.
+    if (!languages.map(normaliseLang).includes(lang)) continue;
     out.push({ id: `${source}:${s.id}`, source, lang, name: stripPrefix(s.id), url: s.url });
   }
   return out;

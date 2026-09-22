@@ -1,4 +1,4 @@
-import { type Alignment, align } from './align';
+import { type Alignment, align, MIN_CUES } from './align';
 import { type CatalogueEntry, SAME_TIMING } from './catalogue';
 import type { Family, Release } from './classify';
 
@@ -88,7 +88,13 @@ function decide(
   references: CatalogueEntry[],
   measured: Map<number, Alignment | null>,
 ): { state: State; via: 'timing' | 'name'; transform?: Alignment } {
-  if (entry.cues && references.length > 0) {
+  // A subtitle with a handful of cues - forced subtitles for a few foreign lines, say -
+  // cannot be told apart from a coincidence by any amount of correlation. Measuring it
+  // would return "no match" for something nobody checked, and the menu would condemn it as
+  // the wrong release. Leave it to the name instead.
+  const measurable = entry.cues && entry.cues.length >= MIN_CUES;
+
+  if (measurable && references.length > 0) {
     // Subtitles in one cluster share a timeline, so they share an answer. Measuring once
     // per cluster rather than once per subtitle is what keeps a fifty-entry menu quick.
     let best: Alignment | undefined;
@@ -102,7 +108,7 @@ function decide(
           best = { scale: 1, offset: 0, matchPct: 1 };
           break;
         }
-        const candidate = align(entry.cues, ref.cues);
+        const candidate = align(entry.cues as number[], ref.cues);
         if (!best || candidate.matchPct > best.matchPct) best = candidate;
       }
       if (cluster !== undefined) measured.set(cluster, best ?? null);

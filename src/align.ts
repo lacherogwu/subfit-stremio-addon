@@ -33,7 +33,7 @@ const TOLERANCE_S = 0.35;
 /** Offsets are proposed by voting in bins this wide, then counted exactly. */
 const BIN_S = 0.1;
 /** Below this many cues there is not enough signal to tell alignment from coincidence. */
-const MIN_CUES = 5;
+export const MIN_CUES = 5;
 /** Offsets beyond this are not a subtitle for the same content. */
 const MAX_OFFSET_S = 600;
 /** How many of the most-voted offsets to score exactly, per ratio. */
