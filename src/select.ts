@@ -209,8 +209,14 @@ export function select(
 
 export type { Family };
 
-/** What the menu can offer for a language, against a given release family. */
-export type Fit = 'fits' | 'fixed' | 'wrong';
+/**
+ * What the menu can offer for a language, against a given release family.
+ *
+ * `unchecked` is its own answer, not a shade of `wrong`. A title with a single subtitle has
+ * nothing to corroborate it, and reporting that as the wrong release would condemn a
+ * subtitle that may well be perfect.
+ */
+export type Fit = 'fits' | 'fixed' | 'unchecked' | 'wrong';
 
 const FAMILIES: Family[] = ['WEB', 'BluRay', 'HDTV', 'DVD'];
 
@@ -240,7 +246,9 @@ export function fitByLanguage(
         ? 'fits'
         : forLang.some((d) => d.state === 'retimed')
           ? 'fixed'
-          : 'wrong';
+          : forLang.some((d) => d.state === 'unknown')
+            ? 'unchecked'
+            : 'wrong';
       const perLang = out[lang] ?? {};
       out[lang] = perLang;
       perLang[family] = fit;

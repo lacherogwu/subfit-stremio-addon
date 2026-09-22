@@ -238,3 +238,32 @@ test('with no stand-in available, the failure is reported rather than faked', as
   const res = await app.request(new URL(chosen?.url ?? '').pathname);
   expect(res.status).toBe(502);
 });
+
+test('a catalogue assembled while a source was failing is still kept', async () => {
+  // Requiring every source to succeed meant a title whose slowest upstream missed the
+  // deadline was never cached — so its stream card stayed blank for good, which is the
+  // opposite of what a cache is for.
+  const subs: RawSub[] = [sub('a', 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON')];
+  let fetches = 0;
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-partial-'))),
+    log: () => {},
+    fetchAll: async () => {
+      fetches++;
+      return { subs, errors: ['slowpoke: took too long, skipped'] };
+    },
+    fetchBody: async () => srtFor(cues.HALCYON),
+  });
+
+  await menu(app);
+  const fit = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
+    ready: boolean;
+    fit: Record<string, Record<string, string>>;
+  };
+
+  expect(fit.ready).toBe(true);
+  // One subtitle, nothing to corroborate it: unverifiable, which is not the same as wrong.
+  expect(fit.fit.he?.BluRay).toBe('unchecked');
+  expect(fetches).toBe(1);
+});

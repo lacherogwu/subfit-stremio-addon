@@ -1,5 +1,5 @@
 import { align, identicalTiming } from './align';
-import type { Cache } from './cache';
+import { type Cache, TTL } from './cache';
 import { classify, type Release } from './classify';
 import type { Config } from './config';
 import type { RawSub, fetchAll as realFetchAll } from './sources';
@@ -126,8 +126,13 @@ export async function buildCatalogue(
     ? { subs: cachedList, errors: [] as string[] }
     : await deps.fetchAll(cfg, type, id, extras, signal ?? budget);
   const { subs, errors } = fetched;
-  if (!cachedList && errors.length === 0 && subs.length > 0) {
-    deps.cache.putCatalogue(listKey, subs);
+  // Kept even when a source failed, for a shorter time. Requiring every source to succeed
+  // meant that a title whose slowest upstream missed the deadline was never cached at all -
+  // so the stream card for that episode stayed blank for good, which is the opposite of
+  // what the cache is for.
+  const ttl = errors.length > 0 ? TTL.partial : TTL.catalogue;
+  if (!cachedList && subs.length > 0) {
+    deps.cache.putCatalogue(listKey, subs, Date.now(), ttl);
   }
   if (subs.length === 0) return { entries: [], errors };
 
@@ -175,10 +180,13 @@ export async function buildCatalogue(
   markDuplicates(entries);
   assignClusters(entries);
 
-  // Only a complete catalogue is worth keeping for six hours. One truncated by the budget
-  // is fine to answer with now and wrong to hand to every later request, so it is left
-  // uncached and the background warm-up gets another go at it.
-  if (!budget.aborted && errors.length === 0) deps.cache.putCatalogue(key, entries);
+  // A catalogue that is complete keeps for six hours; one assembled while a source was
+  // failing, or cut short by the deadline, keeps for half an hour and is rebuilt sooner.
+  // Either way it is kept: most of an answer, now, beats all of it, never.
+  const complete = !budget.aborted && errors.length === 0;
+  if (entries.length > 0) {
+    deps.cache.putCatalogue(key, entries, Date.now(), complete ? TTL.catalogue : TTL.partial);
+  }
 
   return { entries, errors };
 }

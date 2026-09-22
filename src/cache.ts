@@ -12,6 +12,12 @@ const DAY = 24 * HOUR;
  */
 export const TTL = {
   catalogue: 6 * HOUR,
+  /**
+   * For a catalogue assembled while a source was failing or a deadline expired. It is worth
+   * keeping - a card with most of the answer beats a card with none - but not for as long,
+   * because the missing source is probably back.
+   */
+  partial: 30 * 60_000,
   body: 30 * DAY,
   retimed: 30 * DAY,
 } as const;
@@ -74,13 +80,18 @@ export class Cache {
     return raw === null ? null : (JSON.parse(raw) as T);
   }
 
-  putCatalogue(key: string, value: unknown, now: number = Date.now()): void {
+  putCatalogue(
+    key: string,
+    value: unknown,
+    now: number = Date.now(),
+    ttl: number = TTL.catalogue,
+  ): void {
     this.db
       .prepare(
         'INSERT INTO catalogues (key, value, expires_at) VALUES (?, ?, ?) ' +
           'ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at',
       )
-      .run(key, JSON.stringify(value), now + TTL.catalogue);
+      .run(key, JSON.stringify(value), now + ttl);
   }
 
   getRetimed(key: string, now: number = Date.now()): Buffer | null {
