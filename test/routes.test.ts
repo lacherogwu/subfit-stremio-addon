@@ -156,19 +156,26 @@ test('an unknown subtitle key is a clean 404', async () => {
   expect((await appFor().request(`/${TOKEN}/sub/deadbeef.srt`)).status).toBe(404);
 });
 
-test('the families endpoint answers nothing rather than making a stream list wait', async () => {
-  // It is read while a stream list is being built. A partial answer changes between
-  // refreshes, and waiting for a slow upstream is worse than saying nothing at all.
+test('a cold lookup answers from release names, and says it is not the final word', async () => {
+  // A stream list cannot be redrawn once it is on screen, so an answer that arrives later
+  // is no answer at all. A quarter of a second of release names beats a blank card.
   const res = await appFor().request(`/${TOKEN}/fit/series/tt0455275:1:6`);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({});
+  const body = (await res.json()) as { ready: boolean; fit: Record<string, unknown> };
+  expect(body.ready).toBe(false);
+  expect(Object.keys(body.fit).length).toBeGreaterThan(0);
 });
 
 test('once warm, the lookup says what the menu would offer, per release family', async () => {
   const app = appFor();
   await listFor(BLURAY_FILE, app);
   const res = await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`);
-  const fits = (await res.json()) as Record<string, Record<string, string>>;
+  const body = (await res.json()) as {
+    ready: boolean;
+    fit: Record<string, Record<string, string>>;
+  };
+  expect(body.ready).toBe(true);
+  const fits = body.fit;
 
   // Playing a BluRay or a DVD, the subtitle timed for that source fits outright. Playing a
   // WEB release, nothing here was made for one and nothing lines up with one either.
@@ -301,9 +308,11 @@ test('the family counts a card reads never claim more than the menu offers', asy
   const menu = (await (
     await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${file}.json`)
   ).json()) as { subtitles: { id: string }[] };
-  const families = (await (
-    await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)
-  ).json()) as Record<string, Record<string, string>>;
+  const families = (
+    (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
+      fit: Record<string, Record<string, string>>;
+    }
+  ).fit;
 
   expect(menu.subtitles.every((s) => !s.id.includes('⭐'))).toBe(true);
   expect(menu.subtitles.some((s) => s.id.includes('unchecked'))).toBe(true);

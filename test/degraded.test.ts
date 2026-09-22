@@ -178,10 +178,13 @@ test('a release nobody can classify gets no verdicts on the card', async () => {
   expect(fits.he?.unknown).toBeUndefined();
 });
 
-test('the family lookup is silent rather than wrong while nothing is known', async () => {
-  const app = appFor({ subs: [sub('a', 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON')] });
-  const fits = await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json();
-  expect(fits).toEqual({});
+test('a lookup with no sources answering is empty and says it is not ready', async () => {
+  const app = appFor({ subs: [], errors: ['upstream: took too long, skipped'] });
+  const body = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
+    ready: boolean;
+    fit: Record<string, unknown>;
+  };
+  expect(body).toEqual({ ready: false, fit: {} });
 });
 
 test('when a subtitle server is down, an identical subtitle stands in for it', async () => {

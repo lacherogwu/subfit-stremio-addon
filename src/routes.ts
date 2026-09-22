@@ -38,10 +38,21 @@ const srtHeaders = (): Record<string, string> => ({
 });
 
 /**
- * The warm-up that the family lookup kicks off has nobody waiting on it, and it runs while
+ * The warm-up that the fit lookup kicks off has nobody waiting on it, and it runs while
  * someone is still reading a list of streams. It can afford to wait out a slow upstream.
  */
 const BACKGROUND_BUDGET_MS = 60_000;
+
+/**
+ * How long a *cold* fit lookup may spend before answering anyway.
+ *
+ * A stream list is being drawn while this runs, so it has to be imperceptible. It is enough
+ * for the quick subtitle sites (measured at 0.16 s and 0.23 s) and deliberately not enough
+ * for the slow one (3-11 s for the same request), which fills in through the background
+ * build instead. Answering from release names alone is worth a quarter of a second, because
+ * the alternative is a card that says nothing at all on the first view of every episode.
+ */
+const QUICK_BUDGET_MS = 400;
 
 const sameToken = (given: string, expected: string): boolean => {
   const a = Buffer.from(given);
@@ -257,30 +268,46 @@ export function createApp(deps: AppDeps): Hono {
    * anything from 0.2 to 11 seconds, and a partial answer changes between refreshes, which
    * is worse than no answer.
    */
+  /**
+   * What the subtitle menu would offer for this title, per language and per release family:
+   * `fits`, `fixed` (a correction was measured and will be applied) or `wrong`.
+   *
+   * `ready` says whether that came from a measured catalogue or from a quick look at
+   * release names while one is still being built. A stream list cannot be redrawn once it
+   * is on screen, so a caller that knows an answer is still coming can say so rather than
+   * leaving a blank where a verdict belongs.
+   */
   app.get('/:token/fit/:type/:id', async (c) => {
     const type = c.req.param('type');
     const id = (c.req.param('id') ?? '').replace(/\.json$/, '');
     try {
       const cached = deps.cache.getCatalogue<CatalogueEntry[]>(`${type}:${id}`);
-      if (!cached) {
-        // Nothing yet, so start building it. This call happens when someone opens the list
-        // of streams for an episode, seconds before they press play on one of them, which
-        // is exactly the head start the subtitle list needs.
-        void buildCatalogue(deps, cfg, type, id, '', { deadlineMs: BACKGROUND_BUDGET_MS }).catch(
-          () => {},
-        );
-        return c.json({});
+      if (cached) {
+        const key = `fit:${VERSION}:${type}:${id}`;
+        const ready = cache.getCatalogue<Record<string, unknown>>(key);
+        if (ready) return c.json({ ready: true, fit: ready });
+
+        const fit = fitByLanguage(cached, cfg.languages);
+        cache.putCatalogue(key, fit);
+        return c.json({ ready: true, fit });
       }
 
-      const key = `fit:${VERSION}:${type}:${id}`;
-      const ready = cache.getCatalogue<Record<string, unknown>>(key);
-      if (ready) return c.json(ready);
+      // Nothing measured yet, so start the real build - this call happens when someone
+      // opens the list of streams for an episode, seconds before they press play, which is
+      // the head start the subtitle menu needs.
+      void buildCatalogue(deps, cfg, type, id, '', { deadlineMs: BACKGROUND_BUDGET_MS }).catch(
+        () => {},
+      );
 
-      const fits = fitByLanguage(cached, cfg.languages);
-      cache.putCatalogue(key, fits);
-      return c.json(fits);
+      // Meanwhile, answer from whatever the quick sources can say in a quarter of a second.
+      const quick = await buildCatalogue(deps, cfg, type, id, '', {
+        namesOnly: true,
+        deadlineMs: QUICK_BUDGET_MS,
+      });
+      const fit = quick.entries.length > 0 ? fitByLanguage(quick.entries, cfg.languages) : {};
+      return c.json({ ready: false, fit });
     } catch {
-      return c.json({});
+      return c.json({ ready: false, fit: {} });
     }
   });
 
