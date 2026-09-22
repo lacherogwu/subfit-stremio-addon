@@ -20,6 +20,8 @@ interface Ref {
   entryId: string;
   scale: number;
   offset: number;
+  /** The catalogue this came from, so a stand-in can be found if the file is unavailable. */
+  catalogue?: string;
 }
 
 /**
@@ -119,7 +121,13 @@ export function createApp(deps: AppDeps): Hono {
       const scale = d.transform?.scale ?? 1;
       const offset = d.transform?.offset ?? 0;
       const key = refKey(d.entry.id, scale, offset);
-      cache.putRef(key, { url: d.entry.url, entryId: d.entry.id, scale, offset } satisfies Ref);
+      cache.putRef(key, {
+        url: d.entry.url,
+        entryId: d.entry.id,
+        scale,
+        offset,
+        catalogue: `${type}:${id}`,
+      } satisfies Ref);
       return {
         // The label names the source itself, and only where something could not be
         // settled - appending it again here tagged every entry twice.
@@ -174,8 +182,12 @@ export function createApp(deps: AppDeps): Hono {
       try {
         body = unzipFirstSubtitle(await deps.fetchBody(ref.url));
       } catch (err) {
-        log(`sub ${key}: upstream fetch failed: ${String(err)}`);
-        return c.text('subtitle could not be fetched', 502);
+        // The subtitle site is down for this file. Subtitles with identical timings were
+        // already identified when the catalogue was built, so one of those can stand in:
+        // the same timeline, a different server. Better a stand-in than nothing, which is
+        // what a player does with a failed subtitle - it simply shows none.
+        body = await standIn(ref, key, String(err));
+        if (!body) return c.text('subtitle could not be fetched', 502);
       }
     }
 
@@ -194,6 +206,48 @@ export function createApp(deps: AppDeps): Hono {
    * Which timing families exist for a title, per language. Read by the stream list, so it
    * answers from cache or gives up: a subtitle lookup must never hold up a list of streams.
    */
+  /**
+   * A subtitle with the same timings from somewhere else, for when the chosen one's server
+   * will not serve it. Restricted to the same language, since the point is to be readable,
+   * and to the same cluster, since the point is to still be in sync.
+   */
+  const standIn = async (ref: Ref, key: string, why: string): Promise<Buffer | null> => {
+    const entries = ref.catalogue ? cache.getCatalogue<CatalogueEntry[]>(ref.catalogue) : null;
+    const original = entries?.find((e) => e.id === ref.entryId);
+    if (!entries || !original) {
+      log(`sub ${key}: upstream fetch failed: ${why}`);
+      return null;
+    }
+
+    const alternates = entries.filter(
+      (e) =>
+        e.id !== original.id &&
+        e.lang === original.lang &&
+        (e.duplicateOf === original.id ||
+          original.duplicateOf === e.id ||
+          (e.duplicateOf !== undefined && e.duplicateOf === original.duplicateOf) ||
+          (e.cluster !== undefined && e.cluster === original.cluster)),
+    );
+
+    for (const alternate of alternates) {
+      const cached = cache.getBody(alternate.id);
+      if (cached) {
+        log(`sub ${key}: ${why}; served an identical subtitle from ${alternate.source}`);
+        return cached;
+      }
+      try {
+        const fetched = unzipFirstSubtitle(await deps.fetchBody(alternate.url));
+        log(`sub ${key}: ${why}; served an identical subtitle from ${alternate.source}`);
+        return fetched;
+      } catch {
+        // Try the next one.
+      }
+    }
+
+    log(`sub ${key}: upstream fetch failed: ${why}; no stand-in available`);
+    return null;
+  };
+
   /**
    * What the subtitle menu would offer for this title, per language and per release family:
    * `fits`, `fixed` (a correction was measured and will be applied) or `wrong`.

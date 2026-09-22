@@ -183,3 +183,55 @@ test('the family lookup is silent rather than wrong while nothing is known', asy
   const fits = await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json();
   expect(fits).toEqual({});
 });
+
+test('when a subtitle server is down, an identical subtitle stands in for it', async () => {
+  // Observed in the wild: a subtitle site returned 504 for one file, the player retried ten
+  // times, and the viewer got nothing — while a byte-identical copy sat one source away.
+  const twins: RawSub[] = [
+    { ...sub('dead', 'Prison.Break.S01E08.1080p.BluRay.DTS.x264-CtrlHD'), source: 'ktuvit' },
+    { ...sub('alive', 'Prison.Break.S01E08.720p.BluRay.x264-CtrlHD'), source: 'wizdom' },
+  ];
+
+  let serveDead = true;
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-standin-'))),
+    log: () => {},
+    fetchAll: async () => ({ subs: twins, errors: [] }),
+    fetchBody: async (url: string) => {
+      if (url.includes('dead') && !serveDead) throw new Error('HTTP 504');
+      return srtFor(cues.HALCYON);
+    },
+  });
+
+  const list = await menu(app);
+  const chosen = list.subtitles.find((s) => s.url.includes('/sub/'));
+  expect(chosen).toBeDefined();
+
+  // The catalogue is built; now the site hosting the chosen file goes down.
+  serveDead = false;
+  const res = await app.request(new URL(chosen?.url ?? '').pathname);
+
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('-->');
+});
+
+test('with no stand-in available, the failure is reported rather than faked', async () => {
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-nostandin-'))),
+    log: () => {},
+    fetchAll: async () => ({
+      subs: [sub('only', 'Prison.Break.S01E08.1080p.BluRay.x264-CtrlHD')],
+      errors: [],
+    }),
+    fetchBody: async () => {
+      throw new Error('HTTP 504');
+    },
+  });
+
+  const list = await menu(app);
+  const chosen = list.subtitles.find((s) => s.url.includes('/sub/'));
+  const res = await app.request(new URL(chosen?.url ?? '').pathname);
+  expect(res.status).toBe(502);
+});
