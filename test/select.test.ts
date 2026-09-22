@@ -104,19 +104,6 @@ test('an entry with no timing falls back to its name when something corroborates
   expect(it?.label).toContain('BluRay');
 });
 
-test('a lone subtitle vouching for itself is unchecked, not a match', () => {
-  // OpenSubtitles files the occasional subtitle under the wrong show. One such entry was
-  // being advertised as the best Russian match for an episode of a series it is not from,
-  // on the strength of its own filename and nothing else.
-  const lone = entry('Prison.Break.Sequel.s01e06.WEB-DL.720p', undefined, 'ru', 'lone');
-  const { list, stars } = select([lone], classify('Prison.Break.S01E06.1080p.WEB-DL-X.mkv'), [
-    'ru',
-  ]);
-  expect(list[0]?.state).toBe('unknown');
-  expect(list[0]?.label).toContain('unchecked');
-  expect(stars).toEqual([]);
-});
-
 test('but a name-based match is kept when other subtitles of that family exist', () => {
   const namedOnly = entry('Show.S01E01.1080p.WEB-DL-AAA', undefined, 'ru', 'named');
   const webWithTiming = entry('Show.S01E01.1080p.WEB-DL-BBB', cues.ESiR, 'en', 'web-en');
@@ -151,4 +138,40 @@ test('same release group wins the tie for the star', () => {
     ['he'],
   );
   expect(stars[0]?.entry.id).toBe(BLURAY.id);
+});
+
+test('a subtitle from a different show is unchecked, whatever its filename claims', () => {
+  // Subtitle sites file the occasional entry under the wrong show. One such entry was being
+  // advertised as the best Russian match for an episode of a series it is not from, on the
+  // strength of its own filename. Its timings belong elsewhere, so it lines up with nothing
+  // here — which is what gives it away.
+  const elsewhere = cues.HALCYON.map((t) => t * 1.37 + 211);
+  const impostor = entry('Prison.Break.Sequel.s01e06.WEB-DL.720p', elsewhere, 'ru', 'impostor');
+  const real = entry('Prison.Break.S01E06.720p.BluRay.x264-HALCYON', cues.HALCYON, 'he', 'real');
+
+  const { list, stars } = select(
+    [impostor, real],
+    classify('Prison.Break.S01E06.1080p.WEB-DL-X.mkv'),
+    ['he', 'ru'],
+  );
+
+  const judged = list.find((d) => d.entry.id === 'impostor');
+  expect(judged?.state).toBe('unknown');
+  expect(judged?.label).toContain('unchecked');
+  expect(stars.some((s) => s.entry.lang === 'ru')).toBe(false);
+});
+
+test('a subtitle that lines up with the episode is trusted, though nothing shares its release', () => {
+  // The stricter version of this rule asked whether anything else claimed the same release,
+  // and withheld four good recommendations for every bad one it caught. Belonging to the
+  // episode is the question worth asking.
+  const onlyWeb = entry('Show.S01E01.1080p.WEB-DL-AAA', cues.HALCYON, 'he', 'web');
+  const other = entry('Show.S01E01.720p.BluRay-BBB', cues.HALCYON, 'en', 'bluray');
+
+  const { list, stars } = select([onlyWeb, other], classify('Show.S01E01.1080p.WEB-DL-CCC.mkv'), [
+    'he',
+  ]);
+
+  expect(list.find((d) => d.entry.id === 'web')?.state).toBe('match');
+  expect(stars).toHaveLength(1);
 });

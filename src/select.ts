@@ -20,19 +20,25 @@ const ALREADY_ALIGNED_S = 0.35;
 const RANK: Record<State, number> = { match: 3, retimed: 2, unknown: 1, mismatch: 0 };
 
 /**
- * Whether anything other than this subtitle's own filename says it belongs to `family`.
+ * Whether this subtitle demonstrably belongs to the episode at all.
  *
- * A lone subtitle claiming a release nothing else claims cannot be checked, and subtitle
- * sites file the occasional entry under the wrong show entirely. Exported because the
- * family counts served to a stream card must apply exactly this rule: the card and the menu
- * disagreeing about the same subtitle is worse than either of them being cautious.
+ * When nothing of the file's own family is around to measure against, the name is the only
+ * evidence - and subtitle sites file the occasional entry under the wrong show, where the
+ * name is worse than no evidence. So the question asked here is not "does something else
+ * claim this release", which withheld four good recommendations for every bad one it
+ * caught, but "does this line up with any other subtitle for this episode, at any frame
+ * rate and any offset". A subtitle from a different show lines up with nothing.
  */
-export function isCorroborated(
-  entries: CatalogueEntry[],
-  entry: CatalogueEntry,
-  family: Family,
-): boolean {
-  return entries.some((o) => o.id !== entry.id && o.cues && o.release.family === family);
+export function belongsToEpisode(entries: CatalogueEntry[], entry: CatalogueEntry): boolean {
+  const mine = entry.cues;
+  if (!mine || mine.length < MIN_CUES) return false;
+  return entries.some(
+    (o) =>
+      o.id !== entry.id &&
+      o.cues &&
+      o.cues.length >= MIN_CUES &&
+      align(mine, o.cues).matchPct >= SAME_TIMING,
+  );
 }
 
 /**
@@ -171,11 +177,16 @@ export function select(
   const list: Disposition[] = served.map((entry) => {
     let { state, via, transform } = decide(entry, target, references, measured);
 
-    // A subtitle whose only claim to fit is its own filename, with nothing to check it
-    // against, is not a match - it is an assertion. OpenSubtitles files the occasional
-    // subtitle under the wrong show, and one such entry was being advertised as the best
-    // Russian match for an episode of a series it does not belong to.
-    if (state === 'match' && via === 'name' && !isCorroborated(served, entry, target.family)) {
+    // A subtitle whose only claim to fit is its own filename is an assertion, not a match -
+    // so where it *can* be checked against the rest of the episode and matches nothing, it
+    // is treated as unchecked rather than offered as the best pick.
+    //
+    // Only where it can be checked. A subtitle whose body would not download has no
+    // timings to test, and that is this service's failure rather than evidence against it:
+    // its name is then the best that anyone has, and saying so is more use than refusing
+    // to say anything.
+    const testable = entry.cues !== undefined && entry.cues.length >= MIN_CUES;
+    if (state === 'match' && via === 'name' && testable && !belongsToEpisode(served, entry)) {
       state = 'unknown';
       transform = undefined;
     }

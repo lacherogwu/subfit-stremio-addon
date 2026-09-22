@@ -170,11 +170,10 @@ test('once warm, the lookup says what the menu would offer, per release family',
   const res = await app.request(`/${TOKEN}/families/series/tt0455275:1:6`);
   const fits = (await res.json()) as Record<string, Record<string, string>>;
 
-  // Playing a BluRay: the BluRay subtitles fit outright. Playing a DVD: nothing is timed
-  // for one, but the BluRay entries can be corrected onto it, so it is 'fixed' rather than
-  // 'wrong' - the distinction the old count-based answer could not express.
+  // Playing a BluRay or a DVD, the subtitle timed for that source fits outright. Playing a
+  // WEB release, nothing here was made for one and nothing lines up with one either.
   expect(fits.he?.BluRay).toBe('fits');
-  expect(fits.he?.DVD).toBe('fixed');
+  expect(fits.he?.DVD).toBe('fits');
   expect(fits.he?.WEB).toBe('wrong');
 });
 
