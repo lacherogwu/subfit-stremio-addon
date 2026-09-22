@@ -46,13 +46,16 @@ const BACKGROUND_BUDGET_MS = 60_000;
 /**
  * How long a *cold* fit lookup may spend before answering anyway.
  *
- * A stream list is being drawn while this runs, so it has to be imperceptible. It is enough
- * for the quick subtitle sites (measured at 0.16 s and 0.23 s) and deliberately not enough
- * for the slow one (3-11 s for the same request), which fills in through the background
- * build instead. Answering from release names alone is worth a quarter of a second, because
- * the alternative is a card that says nothing at all on the first view of every episode.
+ * A stream list is being drawn while this runs, so it is a budget rather than a wait: every
+ * source that has answered by then is used and the rest are abandoned to the background
+ * build. Sized from measurement rather than taste - the quickest source answers in about
+ * 0.45 s, and the slow one takes 3-11 s for the same request - so this is the smallest
+ * number that buys an answer on the first view of an episode instead of a blank card.
+ *
+ * Upstream latency drifts; when a card stops showing anything on first view, measure the
+ * sources before changing this.
  */
-const QUICK_BUDGET_MS = 400;
+const QUICK_BUDGET_MS = 800;
 
 const sameToken = (given: string, expected: string): boolean => {
   const a = Buffer.from(given);
