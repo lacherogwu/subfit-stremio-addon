@@ -169,9 +169,10 @@ test('a player that sends no filename still gets every subtitle, and no false st
 test('a release nobody can classify gets no verdicts on the card', async () => {
   const app = appFor({ subs: [sub('a', 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON')] });
   await menu(app);
-  const fits = (await (
-    await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)
-  ).json()) as Record<string, Record<string, string>>;
+  const fits = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as Record<
+    string,
+    Record<string, string>
+  >;
   // The lookup answers per family; an unidentifiable release simply finds no entry, and the
   // patch renders no row rather than inventing one.
   expect(fits.he?.unknown).toBeUndefined();

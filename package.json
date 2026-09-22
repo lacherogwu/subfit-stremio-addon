@@ -14,7 +14,8 @@
     "start": "node dist/server.mjs",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "verify": "npm run typecheck && npm run check && npm test && npm run build"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

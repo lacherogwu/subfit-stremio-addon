@@ -3,7 +3,7 @@ import { type Context, Hono } from 'hono';
 import { applyAlignment } from './align';
 import type { Cache } from './cache';
 import { buildCatalogue, type CatalogueDeps, type CatalogueEntry } from './catalogue';
-import { classify, type Family } from './classify';
+import { classify } from './classify';
 import type { Config } from './config';
 import { type Disposition, fitByLanguage, select } from './select';
 import { parseSubtitle, toSrt, unzipFirstSubtitle } from './subtitle';
