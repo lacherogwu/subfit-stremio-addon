@@ -319,3 +319,35 @@ test('the family counts a card reads never claim more than the menu offers', asy
   // The menu will not offer it, so the card must not advertise it.
   expect(families.ru?.WEB).not.toBe('fits');
 });
+
+test('no two subtitles share an id, so none is dropped by the player', async () => {
+  // Players key subtitles by id and quietly drop repeats. Two subtitles describing the same
+  // release from two different sites cost one of them its place in the menu: twelve Hebrew
+  // subtitles arrived as eight.
+  const same = 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON';
+  const subs: RawSub[] = [
+    { id: 'a', source: 'wizdom', lang: 'he', name: same, url: 'http://w/0.srt' },
+    { id: 'b', source: 'ktuvit', lang: 'he', name: same, url: 'http://k/1.srt' },
+    { id: 'c', source: 'opensubtitles', lang: 'he', name: same, url: 'http://o/2.srt' },
+  ];
+  const app = createApp({
+    cfg,
+    cache: new Cache(mkdtempSync(join(tmpdir(), 'subfit-unique-'))),
+    log: () => {},
+    fetchAll: async () => ({ subs, errors: [] }),
+    // Distinct timings, or they would collapse as duplicates, which is a different feature.
+    fetchBody: async (url: string) =>
+      url.includes('/0.srt')
+        ? srtFor(cues.HALCYON)
+        : url.includes('/1.srt')
+          ? srtFor(cues.ESiR)
+          : srtFor(cues['hdtv-LOL']),
+  });
+
+  const body = (await (
+    await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${BLURAY_FILE}.json`)
+  ).json()) as { subtitles: { id: string }[] };
+
+  const ids = body.subtitles.map((s) => s.id);
+  expect(new Set(ids).size).toBe(ids.length);
+});

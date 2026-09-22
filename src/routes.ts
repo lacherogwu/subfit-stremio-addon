@@ -33,6 +33,23 @@ interface Ref {
  * after the first. Unit tests cannot see this: `app.request()` never goes through the node
  * adapter, so nothing mutates anything.
  */
+/**
+ * Players key subtitles by `id` and quietly drop repeats, so two subtitles that happen to
+ * describe themselves the same way - the same release, from two sites - would cost one of
+ * them its place in the menu. Twelve Hebrew subtitles were arriving as eight.
+ *
+ * The source distinguishes them, and a counter covers the rest.
+ */
+function unique(subtitles: { id: string; url: string; lang: string }[]): typeof subtitles {
+  const seen = new Map<string, number>();
+  return subtitles.map((s) => {
+    const count = seen.get(s.id) ?? 0;
+    seen.set(s.id, count + 1);
+    if (count === 0) return s;
+    return { ...s, id: `${s.id} (${count + 1})` };
+  });
+}
+
 const srtHeaders = (): Record<string, string> => ({
   'content-type': 'text/plain; charset=utf-8',
 });
@@ -151,7 +168,7 @@ export function createApp(deps: AppDeps): Hono {
       };
     };
 
-    const subtitles = [...stars.map(toStremio), ...list.map(toStremio)];
+    const subtitles = unique([...stars.map(toStremio), ...list.map(toStremio)]);
 
     // A dead upstream is shown, not swallowed: an entry nobody can select, whose title says
     // which source failed. An empty list would look like "no subtitles exist".
