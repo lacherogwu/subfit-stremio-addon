@@ -171,15 +171,6 @@ The first request for an episode costs whatever the slowest upstream costs, up t
 bodies and measurements are kept for 30 days, catalogues and rendered menus for 6 hours. The
 cache lives beside the config and can be deleted at any time.
 
-`GET /<token>/fit/<type>/<id>` reports what the menu would offer per language for each
-release family — `fits`, `fixed` or `wrong` — which is what lets a stream list say whether a
-release has working subtitles *before* one is played. It
-**never waits on an upstream**: it answers from cache or returns `{}`, and a miss starts the
-build in the background. That is deliberate — it is read while a list of streams is being
-assembled, and one upstream has been measured at anything from 0.2 to 11 seconds for the same
-request. Calling it when the stream list opens gives the subtitle menu a head start of
-seconds before anyone presses play.
-
 ## Development
 
 ```bash

@@ -166,27 +166,6 @@ test('a player that sends no filename still gets every subtitle, and no false st
   expect(body.subtitles.every((s) => s.id.includes('❔'))).toBe(true);
 });
 
-test('a release nobody can classify gets no verdicts on the card', async () => {
-  const app = appFor({ subs: [sub('a', 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON')] });
-  await menu(app);
-  const fits = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as Record<
-    string,
-    Record<string, string>
-  >;
-  // The lookup answers per family; an unidentifiable release simply finds no entry, and the
-  // patch renders no row rather than inventing one.
-  expect(fits.he?.unknown).toBeUndefined();
-});
-
-test('a lookup with no sources answering is empty and says it is not ready', async () => {
-  const app = appFor({ subs: [], errors: ['upstream: took too long, skipped'] });
-  const body = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
-    ready: boolean;
-    fit: Record<string, unknown>;
-  };
-  expect(body).toEqual({ ready: false, fit: {} });
-});
-
 test('when a subtitle server is down, an identical subtitle stands in for it', async () => {
   // Observed in the wild: a subtitle site returned 504 for one file, the player retried ten
   // times, and the viewer got nothing — while a byte-identical copy sat one source away.
@@ -241,8 +220,8 @@ test('with no stand-in available, the failure is reported rather than faked', as
 
 test('a catalogue assembled while a source was failing is still kept', async () => {
   // Requiring every source to succeed meant a title whose slowest upstream missed the
-  // deadline was never cached — so its stream card stayed blank for good, which is the
-  // opposite of what a cache is for.
+  // deadline was never cached — so every request for it paid for that upstream again,
+  // which is the opposite of what a cache is for.
   const subs: RawSub[] = [sub('a', 'Prison.Break.S01E06.720p.BluRay.x264-HALCYON')];
   let fetches = 0;
   const app = createApp({
@@ -257,13 +236,7 @@ test('a catalogue assembled while a source was failing is still kept', async () 
   });
 
   await menu(app);
-  const fit = (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
-    ready: boolean;
-    fit: Record<string, Record<string, string>>;
-  };
+  await menu(app);
 
-  expect(fit.ready).toBe(true);
-  // One subtitle, nothing to corroborate it: unverifiable, which is not the same as wrong.
-  expect(fit.fit.he?.BluRay).toBe('unchecked');
   expect(fetches).toBe(1);
 });

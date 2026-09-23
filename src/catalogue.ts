@@ -86,16 +86,8 @@ const withConcurrency = async <T>(
  */
 export interface CatalogueOptions {
   signal?: AbortSignal;
-  /**
-   * Skip the bodies: classify from names alone, and do not cache the result. Used by the
-   * family lookup, which answers a stream list and must be quick, and which must never
-   * leave a half-measured catalogue behind for the subtitle list to find.
-   */
-  namesOnly?: boolean;
   /** The release being played, when known: its family's subtitles are fetched first. */
   targetFamily?: string;
-  /** Overrides the interactive budget. The background warm-up uses a generous one. */
-  deadlineMs?: number;
 }
 
 export async function buildCatalogue(
@@ -106,7 +98,7 @@ export async function buildCatalogue(
   extras: string,
   opts: CatalogueOptions = {},
 ): Promise<{ entries: CatalogueEntry[]; errors: string[] }> {
-  const { signal, namesOnly, targetFamily } = opts;
+  const { signal, targetFamily } = opts;
   const key = `${type}:${id}`;
   const cached = deps.cache.getCatalogue<CatalogueEntry[]>(key);
   if (cached) return { entries: cached, errors: [] };
@@ -115,7 +107,7 @@ export async function buildCatalogue(
   // equally quick - one of them has been measured at anything from 3 to 11 seconds for the
   // same list - so a budget that covered only the bodies would still let a slow list hold
   // up a player that is waiting to show a menu.
-  const budget = AbortSignal.timeout(opts.deadlineMs ?? cfg.deadlineMs);
+  const budget = AbortSignal.timeout(cfg.deadlineMs);
 
   // The lists are cached separately from the measured catalogue. A request truncated by
   // the budget would otherwise pay the slowest upstream's list again on the very next try,
@@ -128,8 +120,8 @@ export async function buildCatalogue(
   const { subs, errors } = fetched;
   // Kept even when a source failed, for a shorter time. Requiring every source to succeed
   // meant that a title whose slowest upstream missed the deadline was never cached at all -
-  // so the stream card for that episode stayed blank for good, which is the opposite of
-  // what the cache is for.
+  // so every request for it paid for that upstream again, which is the opposite of what the
+  // cache is for.
   const ttl = errors.length > 0 ? TTL.partial : TTL.catalogue;
   if (!cachedList && subs.length > 0) {
     deps.cache.putCatalogue(listKey, subs, Date.now(), ttl);
@@ -144,8 +136,6 @@ export async function buildCatalogue(
     url: s.url,
     release: classify(s.name),
   }));
-
-  if (namesOnly) return { entries, errors };
 
   // The subtitles that can answer "does this fit?" are the ones timed for the file being
   // played, so they are fetched first. If the deadline bites, it bites the entries whose

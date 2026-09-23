@@ -14,7 +14,7 @@ export const TTL = {
   catalogue: 6 * HOUR,
   /**
    * For a catalogue assembled while a source was failing or a deadline expired. It is worth
-   * keeping - a card with most of the answer beats a card with none - but not for as long,
+   * keeping - a menu with most of the subtitles beats one with none - but not for as long,
    * because the missing source is probably back.
    */
   partial: 30 * 60_000,

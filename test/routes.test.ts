@@ -156,34 +156,6 @@ test('an unknown subtitle key is a clean 404', async () => {
   expect((await appFor().request(`/${TOKEN}/sub/deadbeef.srt`)).status).toBe(404);
 });
 
-test('a cold lookup answers from release names, and says it is not the final word', async () => {
-  // A stream list cannot be redrawn once it is on screen, so an answer that arrives later
-  // is no answer at all. A quarter of a second of release names beats a blank card.
-  const res = await appFor().request(`/${TOKEN}/fit/series/tt0455275:1:6`);
-  expect(res.status).toBe(200);
-  const body = (await res.json()) as { ready: boolean; fit: Record<string, unknown> };
-  expect(body.ready).toBe(false);
-  expect(Object.keys(body.fit).length).toBeGreaterThan(0);
-});
-
-test('once warm, the lookup says what the menu would offer, per release family', async () => {
-  const app = appFor();
-  await listFor(BLURAY_FILE, app);
-  const res = await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`);
-  const body = (await res.json()) as {
-    ready: boolean;
-    fit: Record<string, Record<string, string>>;
-  };
-  expect(body.ready).toBe(true);
-  const fits = body.fit;
-
-  // Playing a BluRay or a DVD, the subtitle timed for that source fits outright. Playing a
-  // WEB release, nothing here was made for one and nothing lines up with one either.
-  expect(fits.he?.BluRay).toBe('fits');
-  expect(fits.he?.DVD).toBe('fits');
-  expect(fits.he?.WEB).toBe('wrong');
-});
-
 test('an identical subtitle list is served from cache without rebuilding', async () => {
   const subs: RawSub[] = CATALOGUE.map(([name], i) => ({
     id: `wizdom:${i}`,
@@ -284,9 +256,7 @@ test('a cached menu is not reused across versions', async () => {
   expect(body.subtitles.some((s) => s.id === 'stale')).toBe(false);
 });
 
-test('the family counts a card reads never claim more than the menu offers', async () => {
-  // A subtitle that only vouches for itself is counted as unknown, exactly as the menu
-  // labels it. The two sides disagreeing about the same subtitle is the worst outcome.
+test('a subtitle that only vouches for itself is offered as unchecked, never as the pick', async () => {
   const lone: RawSub[] = [
     {
       id: 'os:lone',
@@ -308,16 +278,9 @@ test('the family counts a card reads never claim more than the menu offers', asy
   const menu = (await (
     await app.request(`/${TOKEN}/subtitles/series/tt0455275:1:6/filename=${file}.json`)
   ).json()) as { subtitles: { id: string }[] };
-  const families = (
-    (await (await app.request(`/${TOKEN}/fit/series/tt0455275:1:6`)).json()) as {
-      fit: Record<string, Record<string, string>>;
-    }
-  ).fit;
 
   expect(menu.subtitles.every((s) => !s.id.includes('⭐'))).toBe(true);
   expect(menu.subtitles.some((s) => s.id.includes('unchecked'))).toBe(true);
-  // The menu will not offer it, so the card must not advertise it.
-  expect(families.ru?.WEB).not.toBe('fits');
 });
 
 test('no two subtitles share an id, so none is dropped by the player', async () => {
